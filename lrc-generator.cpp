@@ -1,34 +1,156 @@
 // .lrc generator for songs's lyrics
 #include <iostream>
+#include <iomanip> // for iostream formatting
 #include <fstream>
 #include <string>
 #include <cstdlib>
 #include <vector>
 #include <chrono> // clock utilities, I use the system clock
 #include <ratio>
+#include <utility> // for std::move in move constructor
 
 // simple class as a wrapper for routines for setting up
 // the .lrc file
-class Menu {
-	public:
+class Lrc_generator {
+	private:
+		std::ofstream lrc_file;
+		std::string title;
+		std::vector<std::string> lyrics;
+	
+		// set title
+		// defaults to argv[1] (without extension) if not set
+		void set_title(void);
+		// set artist
+		void set_artist(void);
+		// set album
+		void set_album(void);
+		// set lrc creator
+		void set_creator(void);
+		// set song lenght
+		// void set_lenght(std::ofstream &lrc_file);
 		// the actual syncing
-		void start_sync(std::vector<std::string> &lyrics);
+		void start_sync(void);
+	public:
+		// menu for setting various parameters
+		void menu(void);
+		
+		Lrc_generator(std::string &name, std::ofstream &file, std::vector<std::string> &text);
 };
 
-void Menu::start_sync(std::vector<std::string> &lyrics) {
+void Lrc_generator::set_title(void) {
+	std::cout << "Song title [defaults to input filename]: ";
+	bool not_ok = true;
+	std::string c;
+	while(not_ok) {
+		std::getline(std::cin, title);
+		std::cout << "Is " << title << " ok? [y/n]";
+		std::getline(std::cin, c);
+		if(c.compare("y") == 0) {
+			not_ok = false;
+		}
+	}
+	
+	// now write it to the file
+	lrc_file << "[ti: " << title << "]\n";
+}
+
+void Lrc_generator::set_artist(void) {
+	std::cout << "Song artist: ";
+	bool not_ok = true;
+	std::string c;
+	std::string artist;
+	while(not_ok) {
+		std::getline(std::cin, artist);
+		std::cout << "Is " << artist << " ok? [y/n]";
+		std::getline(std::cin, c);
+		if(c.compare("y") == 0) {
+			not_ok = false;
+		}
+	}
+	
+	// now write it to the file
+	lrc_file << "[ar: " << artist << "]\n";
+}
+
+void Lrc_generator::set_album(void) {
+	std::cout << "Song album: ";
+	bool not_ok = true;
+	std::string c;
+	std::string album;
+	while(not_ok) {
+		std::getline(std::cin, album);
+		std::cout << "Is " << album << " ok? [y/n]";
+		std::getline(std::cin, c);
+		if(c.compare("y") == 0) {
+			not_ok = false;
+		}
+	}
+	
+	// now write it to the file
+	lrc_file << "[al: " << album << "]\n";
+}
+
+void Lrc_generator::set_creator(void) {
+	std::cout << ".lcr file creator: ";
+	bool not_ok = true;
+	std::string c;
+	std::string creator;
+	while(not_ok) {
+		std::getline(std::cin, creator);
+		std::cout << "Is " << creator << " ok? [y/n]";
+		std::getline(std::cin, c);
+		if(c.compare("y") == 0) {
+			not_ok = false;
+		}
+	}
+	
+	// now write it to the file
+	lrc_file << "[by: " << creator << "]\n";
+}
+
+void Lrc_generator::menu(void) {
+	bool cont = true;
+	int action;
+	while(cont) {
+		system("cls");
+		//system("clear");
+		std::cout 	<< "Menu:\n"
+				<< "\t0: start syncing\n"
+				<< "\t1: set title\n"
+				<< "\t2: set artist\n"
+				<< "\t3: set album\n"
+				<< "\t4: set creator\n"
+				<< "\t5: quit program\n";
+		std::cin >> action;
+		switch(action) {
+			case 0: start_sync(); break;
+			case 1: set_title(); break;
+			case 2: set_artist(); break;
+			case 3: set_album(); break;
+			case 4: set_creator(); break;
+			default: cont = false;
+		}
+	}
+}
+
+void Lrc_generator::start_sync(void) {
 	// now the real syncing begins
-	std::string prev, curr, next;
-	char c;
-	unsigned int i = 0;
 
 	// clock with system time, used to find timepoints and write out in the lrc file
 	std::chrono::system_clock lrc_clock;
 	// start timer and stores incremental timepoints
 	std::chrono::time_point<std::chrono::system_clock> start = lrc_clock.now(), this_point;
+	// stores a duration in milliseconds
+	std::chrono::duration<int, std::milli> time_ms;
 
+	std::string prev, curr, next;
+	char c;
+	unsigned int i = 0;
+	
 	// read vector line by line
 	while(i < lyrics.size()) {
 		// clear screen (not portable)
+		system("cls");
 		//system("clear");
 		
 		// assigns to the current line entry i of the vector
@@ -48,19 +170,45 @@ void Menu::start_sync(std::vector<std::string> &lyrics) {
 		
 		// wait until enter is pressed
 		std::cout << "press enter...\n";
-		
+		// gets line buffer from cin
 		std::cin >> std::noskipws >> c;
+		
 		// get current time point
 		this_point = lrc_clock.now();
-		// calculate the time elapsed and print it
-		std::cout << "since start: " << std::chrono::duration_cast<std::chrono::seconds>(this_point - start).count() << "s\n";
-		// and write down the time point of the clock
-					
+		// calculate the time difference from the start of the clock (in milliseconds)
+		time_ms = 	std::chrono::duration_cast<std::chrono::milliseconds>
+					(this_point - start);
+		
+		// and write to the lrc file a new line
+		// formatted as [mm:ss.centsecond]line
+		lrc_file.fill('0'); // set fill character
+		lrc_file 	<< "[" 
+					<< std::setw(2) << time_ms.count() / (1000 * 60) << ":" 
+					<< std::setw(2) << time_ms.count() / 1000 << "." 
+					<< std::setw(2) << time_ms.count() % 60 << "]" 
+					<< curr << "\n";
+		// also to stdout
+		std::cout.fill('0');
+		std::cout 	<< "["
+					<< std::setw(2) << time_ms.count() / (1000 * 60) << ":" 
+					<< std::setw(2) << time_ms.count() / 1000 << "." 
+					<< std::setw(2) << time_ms.count() % 60 << "]" 
+					<< curr << "\n";
 		// then update the previous line and index
 		prev = curr;
 		i++;
 	}
+	// sync done
+	std::cout << "Syncing done\n";
 }
+
+Lrc_generator::Lrc_generator(std::string &name, std::ofstream &file, std::vector<std::string> &text) {
+	title = name;
+	title.erase(title.size() - 4, 4);
+	lrc_file = std::move(file);
+	lyrics = text;
+}
+
 int main(int argc, char** argv) {
 	if(argc > 1) {
 		// lyrics file is passed as argv[1]
@@ -84,14 +232,14 @@ int main(int argc, char** argv) {
 		
 		// create an lrc file with the same title as the lyrics file
 		// with the .lrc extension
-		std::string lrc_file = argv[1];
-		lrc_file.replace(lrc_file.size() - 4, 3, "lrc");
-		std::cout << "generated file \"" << lrc_file << "\"\n";
-		// a simple class implements a menu for setting up the lrc file
-		Menu setup;
-
-		setup.start_sync(text);
+		std::string lrc_filename = argv[1];
+		lrc_filename.replace(lrc_filename.size() - 3, 3, "lrc");
+		// declare an ostream for that file
+		std::ofstream lrc_file(lrc_filename);
 		
+		// a simple class implements a menu for setting up the lrc file
+		Lrc_generator factory(lrc_filename, lrc_file, text);
+		factory.menu(); // main program loop (menu)
 	}
 	else {
 		std::cout << "No lyrics provided\nUsage: lrc-generator [LYRICS.txt]\n";
