@@ -1,13 +1,14 @@
 // .lrc generator for songs's lyrics
 #include <iostream>
-#include <iomanip> // for iostream formatting
+#include <iomanip> // for cout formatting
 #include <fstream>
 #include <string>
 #include <cstdlib>
 #include <vector>
 #include <chrono> // clock utilities, I use the system clock
 #include <ratio>
-#include <utility> // for std::move in move constructor
+#include <utility> // for std::move in move constructor of the ofstream
+#include <limits> // for numeric limits and cin
 
 // simple class as a wrapper for routines for setting up
 // the .lrc file
@@ -38,10 +39,13 @@ class Lrc_generator {
 };
 
 void Lrc_generator::set_title(void) {
-	std::cout << "Song title [defaults to input filename]: ";
 	bool not_ok = true;
 	std::string c;
+	// skips characters up to and including newline
+	std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 	while(not_ok) {
+		system("clear");
+		std::cout << "Song title [defaults to input filename]: ";
 		std::getline(std::cin, title);
 		std::cout << "Is " << title << " ok? [y/n]";
 		std::getline(std::cin, c);
@@ -55,11 +59,14 @@ void Lrc_generator::set_title(void) {
 }
 
 void Lrc_generator::set_artist(void) {
-	std::cout << "Song artist: ";
 	bool not_ok = true;
 	std::string c;
 	std::string artist;
+	// skips characters up to and including newline
+	std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 	while(not_ok) {
+		system("clear");
+		std::cout << "Song artist: ";
 		std::getline(std::cin, artist);
 		std::cout << "Is " << artist << " ok? [y/n]";
 		std::getline(std::cin, c);
@@ -73,11 +80,14 @@ void Lrc_generator::set_artist(void) {
 }
 
 void Lrc_generator::set_album(void) {
-	std::cout << "Song album: ";
 	bool not_ok = true;
 	std::string c;
 	std::string album;
+	// skips characters up to and including newline
+	std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 	while(not_ok) {
+		system("clear");
+		std::cout << "Song album: ";
 		std::getline(std::cin, album);
 		std::cout << "Is " << album << " ok? [y/n]";
 		std::getline(std::cin, c);
@@ -91,11 +101,14 @@ void Lrc_generator::set_album(void) {
 }
 
 void Lrc_generator::set_creator(void) {
-	std::cout << ".lcr file creator: ";
 	bool not_ok = true;
 	std::string c;
 	std::string creator;
+	// skips characters up to and including newline
+	std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 	while(not_ok) {
+		system("clear");
+		std::cout << ".lcr file creator: ";
 		std::getline(std::cin, creator);
 		std::cout << "Is " << creator << " ok? [y/n]";
 		std::getline(std::cin, c);
@@ -112,8 +125,7 @@ void Lrc_generator::menu(void) {
 	bool cont = true;
 	int action;
 	while(cont) {
-		system("cls");
-		//system("clear");
+		system("clear");
 		std::cout 	<< "Menu:\n"
 				<< "\t0: start syncing\n"
 				<< "\t1: set title\n"
@@ -140,18 +152,17 @@ void Lrc_generator::start_sync(void) {
 	std::chrono::system_clock lrc_clock;
 	// start timer and stores incremental timepoints
 	std::chrono::time_point<std::chrono::system_clock> start = lrc_clock.now(), this_point;
-	// stores a duration in milliseconds
-	std::chrono::duration<int, std::milli> time_ms;
+	// stores a duration in seconds
+	std::chrono::duration<int> time_secs;
 
 	std::string prev, curr, next;
-	char c;
+	std::string c;
 	unsigned int i = 0;
 	
 	// read vector line by line
 	while(i < lyrics.size()) {
 		// clear screen (not portable)
-		system("cls");
-		//system("clear");
+		system("clear");
 		
 		// assigns to the current line entry i of the vector
 		curr = lyrics[i];
@@ -171,28 +182,29 @@ void Lrc_generator::start_sync(void) {
 		// wait until enter is pressed
 		std::cout << "press enter...\n";
 		// gets line buffer from cin
-		std::cin >> std::noskipws >> c;
+		std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+		getline(std::cin, c);
 		
 		// get current time point
 		this_point = lrc_clock.now();
 		// calculate the time difference from the start of the clock (in milliseconds)
-		time_ms = 	std::chrono::duration_cast<std::chrono::milliseconds>
+		time_secs = 	std::chrono::duration_cast<std::chrono::seconds>
 					(this_point - start);
 		
 		// and write to the lrc file a new line
 		// formatted as [mm:ss.centsecond]line
 		lrc_file.fill('0'); // set fill character
 		lrc_file 	<< "[" 
-					<< std::setw(2) << time_ms.count() / (1000 * 60) << ":" 
-					<< std::setw(2) << time_ms.count() / 1000 << "." 
-					<< std::setw(2) << time_ms.count() % 60 << "]" 
+					<< std::setw(2) << (time_secs.count() / 60) % 60 << ":" 
+					<< std::setw(2) << time_secs.count() % 60 << "." 
+					<< std::setw(2) << 0 << "]" 
 					<< curr << "\n";
 		// also to stdout
 		std::cout.fill('0');
 		std::cout 	<< "["
-					<< std::setw(2) << time_ms.count() / (1000 * 60) << ":" 
-					<< std::setw(2) << time_ms.count() / 1000 << "." 
-					<< std::setw(2) << time_ms.count() % 60 << "]" 
+					<< std::setw(2) << (time_secs.count() / 60) % 60 << ":" 
+					<< std::setw(2) << time_secs.count() % 60 << "." 
+					<< std::setw(2) << 0 << "]" 
 					<< curr << "\n";
 		// then update the previous line and index
 		prev = curr;
@@ -240,6 +252,15 @@ int main(int argc, char** argv) {
 		// a simple class implements a menu for setting up the lrc file
 		Lrc_generator factory(lrc_filename, lrc_file, text);
 		factory.menu(); // main program loop (menu)
+
+		// show the contents of the lrc file before exiting
+		lrc_file.close();
+		std::cout << "The resulting .lrc file:\n";
+		in_lyrics.open(lrc_filename);
+		while(std::getline(in_lyrics, line)) {
+			std::cout << line << '\n';
+		}
+
 	}
 	else {
 		std::cout << "No lyrics provided\nUsage: lrc-generator [LYRICS.txt]\n";
