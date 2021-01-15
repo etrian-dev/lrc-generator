@@ -1,6 +1,6 @@
 #ifndef LRC_GEN_INCLUDED
 #define LRC_GEN_INCLUDED
-
+// std lib headers
 #include <fstream>
 #include <string>
 
@@ -8,8 +8,13 @@
 // the .lrc file
 class Lrc_generator {
     private:
-		std::ifstream input_stream;
+        // input and output text streams
+		    std::ifstream input_stream;
         std::ofstream output_stream;
+
+        // music stream filename
+        std::string songfile;
+
         // interactively set title
         void set_title(void);
         // interactively set artist
@@ -25,11 +30,11 @@ class Lrc_generator {
     public:
         // interactive menu loop used for setting parameters and syncing
         void run(void);
-        
+
 		// constructor taking an input file and an output file
-        Lrc_generator(std::string& in_file, std::string& out_file);
+        Lrc_generator(std::string& in_file, std::string& out_file, std::string& song_fname);
         // constructor taking an input stream and an output stream
-        Lrc_generator(std::ifstream& in_stream, std::ofstream& out_stream);
+        Lrc_generator(std::ifstream& in_stream, std::ofstream& out_stream, std::string& song_fname);
 };
 
 #endif

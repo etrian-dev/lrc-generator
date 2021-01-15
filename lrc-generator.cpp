@@ -1,6 +1,7 @@
 // header file for the generator class
 #include "lrc-generator.h"
-
+// SFML headers for music playback
+#include <SFML/Audio.hpp>
 // standard lib headers
 #include <iostream>
 #include <iomanip>  // for streams formatting
@@ -13,7 +14,7 @@
 #include <utility>  // for std::move, used to move-construct a stream
 
 // constructor taking an input and an output filenames as std::string
-Lrc_generator::Lrc_generator(std::string& in_file, std::string& out_file) {
+Lrc_generator::Lrc_generator(std::string& in_file, std::string& out_file, std::string& song_fname) {
     // open an input and an output stream with the filenames specified
     this->input_stream = std::ifstream(in_file, std::ios_base::in);
     this->output_stream = std::ofstream(out_file, std::ios_base::out);
@@ -25,12 +26,16 @@ Lrc_generator::Lrc_generator(std::string& in_file, std::string& out_file) {
         std::cerr << "Error opening the input stream on file \"" << out_file << "\".\n";
         exit(1);
     }
+
+    this->songfile = song_fname;
 }
 // constructor taking an input and an output stream
-Lrc_generator::Lrc_generator(std::ifstream& in_stream, std::ofstream& out_stream) {
+Lrc_generator::Lrc_generator(std::ifstream& in_stream, std::ofstream& out_stream, std::string& song_fname) {
     // move assign the streams to the instance variables
     this->input_stream = std::move(in_stream);
     this->output_stream = std::move(out_stream);
+
+    this->songfile = song_fname;
 }
 
 // function to interactively set the song's title
@@ -42,8 +47,9 @@ void Lrc_generator::set_title(void) {
     std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
     while(not_ok) {
         /// TODO:should be replaced with some ncurses function
-        system("clear");
-
+        #ifdef DEBUG_MODE
+          system("clear");
+        #endif
         std::cout << "Song title: ";
         std::getline(std::cin, title);
         std::cout << "Is " << title << " ok? [y/n]";
@@ -52,7 +58,7 @@ void Lrc_generator::set_title(void) {
             not_ok = false;
         }
     }
-    
+
     // now write it to the file
     this->output_stream << "[ti: " << title << "]\n";
 }
@@ -66,8 +72,9 @@ void Lrc_generator::set_artist(void) {
     std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
     while(not_ok) {
         /// TODO:should be replaced with some ncurses function
-        system("clear");
-
+        #ifdef DEBUG_MODE
+          system("clear");
+        #endif
         std::cout << "Song artist: ";
         std::getline(std::cin, artist);
         std::cout << "Is " << artist << " ok? [y/n]";
@@ -76,7 +83,7 @@ void Lrc_generator::set_artist(void) {
             not_ok = false;
         }
     }
-    
+
     // now write it to the file
     this->output_stream << "[ar: " << artist << "]\n";
 }
@@ -90,8 +97,9 @@ void Lrc_generator::set_album(void) {
     std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
     while(not_ok) {
         /// TODO:should be replaced with some ncurses function
-        system("clear");
-
+        #ifdef DEBUG_MODE
+          system("clear");
+        #endif
         std::cout << "Song album: ";
         std::getline(std::cin, album);
         std::cout << "Is " << album << " ok? [y/n]";
@@ -100,7 +108,7 @@ void Lrc_generator::set_album(void) {
             not_ok = false;
         }
     }
-    
+
     // now write it to the file
     this->output_stream << "[al: " << album << "]\n";
 }
@@ -114,8 +122,9 @@ void Lrc_generator::set_creator(void) {
     std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
     while(not_ok) {
         /// TODO:should be replaced with some ncurses function
-        system("clear");
-
+        #ifdef DEBUG_MODE
+          system("clear");
+        #endif
         std::cout << ".lcr file creator: ";
         std::getline(std::cin, creator);
         std::cout << "Is " << creator << " ok? [y/n]";
@@ -124,46 +133,61 @@ void Lrc_generator::set_creator(void) {
             not_ok = false;
         }
     }
-    
+
     // now write it to the file
     this->output_stream << "[by: " << creator << "]\n";
 }
 
 // function to sync the lyrics to the song
-/// TODO: add support to actually play the song directly as well
 void Lrc_generator::sync(void) {
     // uses system clock to compare timepoints and print elapsed time
     std::chrono::system_clock lrc_clock;
-    // variables holding the current and initial timepoint
+    // variables holding the current and initial timepoints
     std::chrono::time_point<std::chrono::system_clock> this_point, start;
-    // stores a duration in seconds (default)
+    // stores a duration in seconds
     std::chrono::duration<int> time_secs;
 
-    // lines are stored here
-    std::string prev;
+    // lines are stored in this variables, c is just a dummy variable to signal the
+    // enter key being pressed
     std::string current;
+    std::string next;
     std::string c;
-    unsigned int i = 0;
+
+    // load the song in a sf::Music object
+    // it's a stream, so it must not be destroyed as long as it's being played
+    sf::Music song;
+    if(!song.openFromFile(this->songfile)) {
+      std::cerr << "Failed to open the song at \"" << this->songfile << "\"\n";
+    }
 
     // stores the initial timepoint
     start = lrc_clock.now();
 
     // discards characters until newline from cin
     std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-    
+
+    // THE SONG (IF LOADED) STARTS PLAYING
+    // does not loop when the end is reached by default
+    song.play();
+
     // as the user presses enter write the corresponding time difference to the file
-    while(std::getline(this->input_stream, current)) {
+    while(std::getline(this->input_stream, next)) {
         /// TODO:should be replaced with some ncurses function
-        system("clear");
-        // display the previous, next and current line on stdout
-        std::cout   << "previous:\t" << (prev.empty() ? "(null)" : prev)
-                    << "\ncurrent:\t" << current << "\n";
-        
+        #ifdef DEBUG_MODE
+          system("clear");
+        #endif
+
+        // display the current line being synced and the next one on stdout
+        // when the current line finishes one can either wait for the next to begin
+        // or press enter and make the next appear on screen (when reproduced)
+        std::cout   << "Current:\t" << (current.empty() ? "(null)" : current)
+                    << "\nNext:\t" << next << "\n";
+
         // wait until enter is pressed
         std::cout << "press enter...\n";
         // gets a line, just for the sake of detecting the key press
         getline(std::cin, c);
-        
+
         // get the current time point
         this_point = lrc_clock.now();
         // calculate the difference from the start point
@@ -171,16 +195,18 @@ void Lrc_generator::sync(void) {
         // and write to the .lrc file a new line
         // formatted as [mm:ss.centsecond]<line text>
         this->output_stream.fill('0'); // set the fill character for unspecified fields
-        this->output_stream    << "[" 
-                    << std::setw(2) << (time_secs.count() / 60) % 60 << ":" 
-                    << std::setw(2) << time_secs.count() % 60 << "." 
-                    << std::setw(2) << 0 << "]" 
-                    << current << "\n";
+        this->output_stream    << "["
+                    << std::setw(2) << (time_secs.count() / 60) % 60 << ":"
+                    << std::setw(2) << time_secs.count() % 60 << "."
+                    << std::setw(2) << 0 << "]"
+                    << next << "\n";
 
         // then update the previous line
-        prev = current;
+        current = next;
     }
-    // sync done
+
+    // sync done, the song stops
+    song.stop();
     std::cout << "Syncing done\n";
 }
 
@@ -190,8 +216,9 @@ void Lrc_generator::run(void) {
     int action;
     while(cont) {
         /// TODO:should be replaced with some ncurses function
-        system("clear");
-
+        #ifdef DEBUG_MODE
+          system("clear");
+        #endif
         std::cout   << "Menu:\n"
                 << "\t0: start syncing\n"
                 << "\t1: set title\n"
