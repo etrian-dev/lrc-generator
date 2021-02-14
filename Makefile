@@ -2,26 +2,24 @@
 .PREFIX:
 #compiler macro
 CC = g++
-#compiler flags for the stable build, turns on optimization level 2 and turn off linking
+#compilation flags for the stable build
+#turns on optimization level 2
+#compilation only, produces object files
 CFLAGS = -O2 -Wall -pedantic -c
-#linking flags: this application uses the audio module, which depends on the
-#system module, so the latter must appear last in the list
-LDFLAGS = -lsfml-audio -lsfml-system
-#debug flags, turn on additional console warning and messages on the status
+#linking flags: sfml and ncurses
+# sfml-audio depends on sfml-system, so it must come before it in the list
+LDFLAGS = -lsfml-audio -lsfml-system -lncurses
+#debug flags
 DBFLAGS = -g -D DEBUG_MODE
 
-#source files required for compiling
-SRC = main.cpp lrc-generator.cpp
-#object files required for linking
-OBJ = main.o lrc-generator.o
+#source files path (relative to Makefile)
+SRC = src/
+#object files path (relative to Makefile)
+#OBJ = obj/
 
-all: stable
 clean:
 	rm -f stable/lrc-generator debug/lrc-generator
-	rm -f $(OBJ)
-stable: $(OBJ)
-	$(CC) -o stable/lrc-generator $(OBJ) $(LDFLAGS)
-debug: $(SRC)
-	$(CC) -o debug/lrc-generator $(DBFLAGS) $(SRC) $(LDFLAGS)
-src: $(SRC)
-	$(CC) $(CFLAGS) $(SRC)
+stable: $(SRC)*.cpp
+	$(CC) -o stable/lrc-generator $(SRC)*.cpp $(LDFLAGS)
+debug: $(SRC)*.cpp
+	$(CC) -o debug/lrc-generator $(DBFLAGS) $(SRC)*.cpp $(LDFLAGS)
