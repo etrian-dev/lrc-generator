@@ -1,4 +1,6 @@
-#include "lrc-generator.h"
+// header file for the generator class
+#include "../headers/lrc-generator.h"
+// curses library
 #include <ncurses.h>
 
 void Lrc_generator::interface_setup(void)
@@ -6,7 +8,7 @@ void Lrc_generator::interface_setup(void)
 	// splits the terminal: a left section with a menu and a right one with the lyrics
 	getmaxyx(stdscr, this->height, this->width);
 	this->menu = newwin(this->height, this->width / 2, 0, 0);
-	this->lyrics = newwin(this->height, this->width / 2, 0, this->width / 2);
+	this->lyrics_win = newwin(this->height, this->width / 2, 0, this->width / 2);
 }
 
 void Lrc_generator::draw_menu(void)
@@ -21,10 +23,8 @@ void Lrc_generator::draw_menu(void)
 		"set album",
 		"set creator",
 		"quit program"};
-	int h, w;
 	const int hoff = 1;
 	const int woff = 1;
-	getmaxyx(this->menu, h, w);
 	// draw options on the menu window
 	wclear(this->menu);
 	wstandout(this->menu);

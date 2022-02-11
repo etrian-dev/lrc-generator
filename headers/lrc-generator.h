@@ -3,20 +3,29 @@
 // std lib headers
 #include <fstream>
 #include <string>
+#include <vector>
+#include <filesystem>
 // ncurses header
 #include <ncurses.h>
+
+namespace fs = std::filesystem;
 
 // simple class as a wrapper for routines for setting up
 // the .lrc file
 class Lrc_generator
 {
 private:
-    // input and output text streams
-    std::ifstream input_stream;
+    // the output text stream to write to
     std::ofstream output_stream;
 
+    // the song's text
+    std::vector<std::string> lyrics;
+
+    // the text to be written to the output file
+    std::vector<std::string> lrc_text;
+
     // music stream filename
-    std::string songfile;
+    fs::path songfile;
 
     // interactively set song lenght
     // void set_lenght(std::ofstream &lrc_file);
@@ -25,7 +34,7 @@ private:
 
     // TUI functions & variables
     WINDOW *menu;
-    WINDOW *lyrics;
+    WINDOW *lyrics_win;
     int height;
     int width;
     void interface_setup(void);
@@ -39,9 +48,8 @@ public:
     void run(void);
 
     // constructor taking an input file and an output file
-    Lrc_generator(std::string &in_file, std::string &out_file, std::string &song_fname);
-    // constructor taking an input stream and an output stream
-    Lrc_generator(std::ifstream &in_stream, std::ofstream &out_stream, std::string &song_fname);
+    Lrc_generator(fs::path &in_file, fs::path &out_file, fs::path &song_fname);
+    ~Lrc_generator();
 };
 
 #endif
