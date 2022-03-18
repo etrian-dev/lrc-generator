@@ -82,7 +82,19 @@ void Lrc_generator::set_attr_dialog(std::string attr)
 	{
 		attr.assign("by"); // the creator attribute has another abbreviation
 	}
-	this->output_stream << "[" << attr.substr(0, 2) << ": " << value << "]\n";
+	// push this metadata (updates if it was already set)
+	/// TODO: improve this
+	size_t j = 0;
+	for(;j < this->metadata.size(); j++) {
+		if(this->metadata[j].find("[" + attr.substr(0, 2) + ": ") != std::string::npos) {
+			this->metadata[j].erase();
+			this->metadata[j] = "[" + attr.substr(0, 2) + ": " + value + "]";
+			break;
+		}
+	}
+	if(j == this->metadata.size()) {
+		this->metadata.push_back("[" + attr.substr(0, 2) + ": " + value + "]");
+	}
 	// deletes this window
 	delwin(dialog);
 }

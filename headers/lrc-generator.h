@@ -21,6 +21,8 @@ private:
     // the song's text
     std::vector<std::string> lyrics;
 
+    // metadata to be written at the top of the output file
+    std::vector<std::string> metadata;
     // the text to be written to the output file
     std::vector<std::string> lrc_text;
 

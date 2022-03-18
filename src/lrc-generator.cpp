@@ -44,6 +44,8 @@ Lrc_generator::Lrc_generator(fs::path &in_file, fs::path &out_file, fs::path &so
         this->lyrics.push_back(std::move(line));
     }
 
+    this->metadata = std::vector<std::string>();
+
     this->songfile = song_path;
 
     if(input_stream.eof()) {
@@ -53,7 +55,11 @@ Lrc_generator::Lrc_generator(fs::path &in_file, fs::path &out_file, fs::path &so
 
 Lrc_generator::~Lrc_generator() {
     size_t i;
-    for(i = 0; i < this->lyrics.size(); i++) {
+    // write the metadata (if any) first
+    for(auto ln : this->metadata) {
+        this->output_stream << ln << '\n';
+    }
+    for(i = 0; i < this->lrc_text.size(); i++) {
         // first append the time point
         this->output_stream << this->lrc_text[i] << this->lyrics[i] << '\n';
     }
@@ -100,16 +106,9 @@ void Lrc_generator::sync(void)
     unsigned int tot_lines = this->lyrics.size();
     unsigned int idx = 0;
     next = this->lyrics[0]; // to initialize the loop correctly, since this line will become the current below
-    while(idx < tot_lines) {
+    while(idx < tot_lines - 1) {
         current = next;
-        if(idx + 1 < tot_lines) {
-            // there are more lines yet to be displayed
-            next = this->lyrics[idx + 1];
-        }
-        else {
-            // the current is the last line
-            next.erase();
-        }
+        next = this->lyrics[idx + 1];
 
         wclear(this->lyrics_win);
         box(this->lyrics_win, 0, 0);
@@ -177,7 +176,7 @@ void Lrc_generator::sync(void)
         // formatted as [mm:ss.centsecond]<line>
         std::string str_timestamp = "["
             + std::to_string((tot_playback.count() / 60000) % 60000) + ":"
-            + std::to_string(tot_playback.count() / 1000) + ":"
+            + std::to_string(tot_playback.count() / 1000) + "."
             + std::to_string((tot_playback.count() / 10) % 100) + "]";
         this->lrc_text.push_back(str_timestamp);
         // the starting timepoint for the new line is the one saved above
