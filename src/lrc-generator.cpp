@@ -19,7 +19,7 @@ namespace ns = std::filesystem;
 
 // define more practical names for std::chrono things
 using Clock = std::chrono::system_clock;
-using TimeSecs = std::chrono::duration<int>;
+using MilliSecs = std::chrono::milliseconds;
 
 // constructor taking an input and an output filenames as std::string
 Lrc_generator::Lrc_generator(fs::path &in_file, fs::path &out_file, fs::path &song_path)
@@ -63,16 +63,15 @@ Lrc_generator::~Lrc_generator() {
 // function to sync the lyrics to the song
 void Lrc_generator::sync(void)
 {
-    // uses the system clock to compare timepoints and print elapsed time
-    Clock lrc_clock;
-    // variables holding the current and initial timepoints
-    std::chrono::time_point<Clock> start, current_tp, tmp;
-    // the total pause is initialized as zero
-    std::chrono::time_point<Clock> pause_total = std::chrono::time_point<Clock>();
-    // current and next line strings
+    Clock clock;
+    std::chrono::time_point<Clock> line_start_tp, current_tp;
+    // this duration object stores the time spent in song playback (accounting for pauses)
+    // Its value is written on the lrc file when the user marks the beginning of a new line
+    MilliSecs tot_playback = MilliSecs::zero();
+    // current and next line in the lyrics
     std::string current;
     std::string next;
-    // dummy variable used to store getch()'s output
+    // dummy variable
     int c;
 
     // load the song in a sf::Music object
@@ -86,49 +85,54 @@ void Lrc_generator::sync(void)
     }
 
     // stores the initial timepoint
-    start = lrc_clock.now();
+    line_start_tp = clock.now();
 
     // THE SONG (IF LOADED) STARTS PLAYING
     // does not loop when the end is reached by default
     song.play();
 
+    // offsets from the window border
+    const int hoff = 2;
+    const int woff = 2;
     int height, width;
     getmaxyx(this->lyrics_win, height, width);
 
-    const int hoff = 2;
-    const int woff = 2;
-
-    unsigned int dim = this->lyrics.size();
+    unsigned int tot_lines = this->lyrics.size();
     unsigned int idx = 0;
-    next = this->lyrics[0]; // to initialize the loop correctly
-    // as the user presses enter write the corresponding time difference to the file
-    while(idx < dim) {
+    next = this->lyrics[0]; // to initialize the loop correctly, since this line will become the current below
+    while(idx < tot_lines) {
         current = next;
-        if(idx + 1 < dim) {
+        if(idx + 1 < tot_lines) {
+            // there are more lines yet to be displayed
             next = this->lyrics[idx + 1];
         }
         else {
+            // the current is the last line
             next.erase();
         }
 
         wclear(this->lyrics_win);
         box(this->lyrics_win, 0, 0);
-        // display the current line being synced and the next one on stdout
+        // display the current line being synchronized and the next one on stdout
         // or print "(null)" if the line is empty
         mvwprintw(this->lyrics_win, hoff, woff, "Curr:\t%s", (current.empty() ? "(null)" : current.c_str()));
         mvwprintw(this->lyrics_win, hoff + 1, woff, "Next:\t%s", (next.empty() ? "(null)" : next.c_str()));
-        mvwaddstr(this->lyrics_win, height - 4, woff, "space: pause syncing");
-        mvwaddstr(this->lyrics_win, height - 3, woff, "'s': restart syncing");
+        mvwprintw(this->lyrics_win, hoff + 3, woff, "Last timestamp [%2d.%d s]", tot_playback.count() / 1000, (tot_playback.count() / 10) % 100);
+        // bottom command cheatsheet
+        mvwaddstr(this->lyrics_win, height - 4, woff, "space: pause");
+        mvwaddstr(this->lyrics_win, height - 3, woff, "'s: restart synchronization");
         mvwaddstr(this->lyrics_win, height - 2, woff, "any other key: advance to the next line");
         wrefresh(this->lyrics_win);
-
-        // gets the character to advance
+        
+        // blocks until a character is pressed
         c = wgetch(this->lyrics_win);
-        // if c is space, pause the syncing
+       
         if (c == ' ') {
-          // record the time point at the start of the pause
-          std::chrono::time_point<Clock> pause_start = lrc_clock.now();
-          // pause the song being played and print a PAUSE string at the window's center
+          // Pause the synchronization
+
+          // stores the time passed from the last timestamp up to now
+          tot_playback += std::chrono::duration_cast<MilliSecs>(clock.now() - line_start_tp);
+          // pause the audio track and
           song.pause();
           wclear(this->lyrics_win);
           box(this->lyrics_win, 0, 0);
@@ -139,48 +143,53 @@ void Lrc_generator::sync(void)
           wstandend(this->lyrics_win);
           mvwaddstr(this->lyrics_win, height / 2 + 1, width / 2 - resume.length()/2, resume.data());
           wrefresh(this->lyrics_win);
-          // wait for a key to be pressed to resume
+          // waits for a key press to resume
           c = wgetch(this->lyrics_win);
-          // record duration of the pause
-          pause_total += lrc_clock.now() - pause_start;
-          continue;
+          // the time point at the end of a pause is the new starting point for the line
+          line_start_tp = clock.now();
+          // A little trick: ensure that at the next iteration a line is not skipped
+          next = current;
+          continue; // to avoid recording a timestamp immediately
         }
-        // if the user pressed 's' the syncing is restarted
+
         if(c == 's') {
+            // Restart sychronization
+
             // stop the song, clear the output and reset the index and line
             song.stop();
             this->lrc_text.clear();
-            start = lrc_clock.now();
+            // reset the starting clock and the song duration offset
+            tot_playback = MilliSecs::zero();
+            line_start_tp = clock.now();
             idx = 0;
             next = this->lyrics[0];
-            continue; // skip the rest of the iteration
+            continue; // to avoid recording a timestamp immediately
         }
 
         // Another key has been pressed: register the time point of this line on
         // the output vector and then advance the index in the input vector
 
-        // get the current time point
-        current_tp = lrc_clock.now();
-        // calculate the difference from the start point
-        // FIXME: the operator '-' creates a duration, which can't be subtracted from a time point
-        TimeSecs tm_diff = std::chrono::duration_cast<TimeSecs>(current_tp - start);
-        TimeSecs tm_pause = std::chrono::duration_cast<TimeSecs>(
-            pause_total - std::chrono::time_point<Clock>());
-        TimeSecs elapsed_tm = tm_diff - tm_pause;
-        // and write to the .lrc file a new line
-        // formatted as [mm:ss.centsecond]<line text>
+        // save the current time point
+        current_tp = clock.now();
+        // calculate the duration of the line just finished
+        tot_playback += std::chrono::duration_cast<MilliSecs>(current_tp - line_start_tp);
+        // and push to the vector the correspoding timestamp
+        // formatted as [mm:ss.centsecond]<line>
         std::string str_timestamp = "["
-            + std::to_string((elapsed_tm.count() / 60) % 60) + ":"
-            + std::to_string(elapsed_tm.count() % 60) + ".00]";
+            + std::to_string((tot_playback.count() / 60000) % 60000) + ":"
+            + std::to_string(tot_playback.count() / 1000) + ":"
+            + std::to_string((tot_playback.count() / 10) % 100) + "]";
         this->lrc_text.push_back(str_timestamp);
-        // get the next line
+        // the starting timepoint for the new line is the one saved above
+        line_start_tp = current_tp;
+        
         idx++;
     }
 
     // sync done, the song stops
     song.stop();
     wclear(this->lyrics_win);
-    mvwprintw(this->lyrics_win, 0, 0, "syncing done\n");
+    mvwprintw(this->lyrics_win, 0, 0, "Synchronization DONE\n");
 }
 
 // the menu loop presented by the class to the user
