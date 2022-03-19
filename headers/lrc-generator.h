@@ -8,6 +8,9 @@
 // ncurses header
 #include <ncurses.h>
 
+// Version definition
+#define VERSION "0.1.1"
+
 namespace fs = std::filesystem;
 
 // simple class as a wrapper for routines for setting up

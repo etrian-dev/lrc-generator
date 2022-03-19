@@ -36,6 +36,7 @@ std::vector<string> parse_args(int argc, const char **argv) {
     cxxopts::Options all_opts("Lrc generator", "A simple TUI to generate .lrc files");
     all_opts.add_options()
     ("h,help", "Help message")
+    ("v,version", "Prints the version number")
     ("o,output", "Output file to be written", cxxopts::value<string>())
     ("a,audio-file", "Input audio file", cxxopts::value<string>())
     ("l,lyrics-file", "Input lyrics file", cxxopts::value<string>());
@@ -44,6 +45,10 @@ std::vector<string> parse_args(int argc, const char **argv) {
     if (res.count("help") > 0)
     {
         std::cout << all_opts.help() << "\n";
+        return files;
+    }
+    if (res.count("version") > 0) {
+        std::cout << argv[0] << ": " << VERSION << "\n";
         return files;
     }
     string audio_fname = string();
