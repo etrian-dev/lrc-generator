@@ -37,15 +37,10 @@ the maximum volume currently set.
 Note that the output file is written only when the program exits correctly, so as to allow to reorder output lines and restart the synchronization, if needed.
 
 ### Synchronization
-During the synchronization timestamps of lines are taken when the next line becomes the current (by pressing some key).
-A simple example:
-
-Suppose the synchronization started 10s ago and the following is on screen
-- curr: some line
-- next: other line
-After pressing Enter the following line will be appended to the output file:
-- [0:10.00]other line
-
+During synchronization the line timestamp (when such line will appear on the music player)
+should be set by pressing some key as soon as that line starts, so to set **curr**'s timestamp
+one should wait the termination of the line before (not on screen at the moment) and then
+press some key. This behaviour will be changed, as it's a bit unintuitive
 ### LICENSE
 The license is MIT, as provided in the LICENSE file.
 The [cxxopts](https://github.com/jarro2783/cxxopts) library that has been used for command line option parsing

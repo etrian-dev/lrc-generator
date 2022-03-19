@@ -116,7 +116,7 @@ void Lrc_generator::sync(void)
         // or print "(null)" if the line is empty
         mvwprintw(this->lyrics_win, hoff, woff, "Curr:\t%s", (current.empty() ? "(null)" : current.c_str()));
         mvwprintw(this->lyrics_win, hoff + 1, woff, "Next:\t%s", (next.empty() ? "(null)" : next.c_str()));
-        mvwprintw(this->lyrics_win, hoff + 3, woff, "Last timestamp [%2d.%d s]", tot_playback.count() / 1000, (tot_playback.count() / 10) % 100);
+        mvwprintw(this->lyrics_win, hoff + 3, woff, "Last timestamp [%d.%d s]", tot_playback.count() / 1000, (tot_playback.count() / 10) % 100);
         // bottom command cheatsheet
         mvwaddstr(this->lyrics_win, height - 4, woff, "space: pause");
         mvwaddstr(this->lyrics_win, height - 3, woff, "'s: restart synchronization");
@@ -176,7 +176,7 @@ void Lrc_generator::sync(void)
         // formatted as [mm:ss.centsecond]<line>
         std::string str_timestamp = "["
             + std::to_string((tot_playback.count() / 60000) % 60000) + ":"
-            + std::to_string(tot_playback.count() / 1000) + "."
+            + std::to_string((tot_playback.count() / 1000) % 60) + "."
             + std::to_string((tot_playback.count() / 10) % 100) + "]";
         this->lrc_text.push_back(str_timestamp);
         // the starting timepoint for the new line is the one saved above
