@@ -1,6 +1,6 @@
 #ifndef LRC_LINE_INCLUDED
 #define LRC_LINE_INCLUDED
-// std lib headers
+
 #include <string>
 
 using std::string;
@@ -14,8 +14,12 @@ private:
 
 public:
   Line();
+  Line(string ln);
   Line(string ln, uint_fast64_t delay);
-
+  // setters
+  bool set_string(string s);
+  bool set_delay(uint_fast64_t delay);
+  // getters
   string get_text();
   uint_fast64_t get_delay();
 };

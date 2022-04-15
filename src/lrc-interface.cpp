@@ -1,22 +1,56 @@
 // header file for the generator class
 #include "../headers/lrc-generator.h"
+#include <tuple>
+// C-style asserts
+#include <cassert>
 // curses library
 #include <ncurses.h>
 
-void Lrc_generator::interface_setup(void) {
+Lrc_interface::Lrc_interface(Lrc_generator& generator) {
+    // Sets the reference to the generator object
+    this->model = generator;
     // splits the terminal: a left section with a menu and a right one with the
     // lyrics
-    getmaxyx(stdscr, this->height, this->width);
-    this->menu = newwin(this->height, this->width / 2, 0, 0);
-    this->lyrics_win = newwin(this->height, this->width / 2, 0, this->width / 2);
+    getmaxyx(stdscr, this->max_height, this->max_width);
+    this->menu = newwin(this->max_height, this->max_width / 2, 0, 0);
+    this->lyrics_win = newwin(this->max_height, this->max_width / 2, 0, this->max_width / 2);
+    this->menu_items = new vector<string>();
+    assert(this->menu != NULL);
+    assert(this->lyrics_win != NULL);
+    // enable the keypad for KEY_UP/DOWN
+    keypad(this->lyrics_win, true);
 }
 
-void Lrc_generator::draw_menu(void) {
-    // menu options
-    const int opts = 6;
-    std::string menu_items[opts] = {"start syncing", "preview",   "set title",
-                                    "set artist",    "set album", "set creator"
-                                   };
+Lrc_interface::~Lrc_interface(void) {
+    wclear(this->menu);
+    wclear(this->lyrics_win);
+    wrefresh(this->menu);
+    wrefresh(this->lyrics_win);
+
+    delwin(this->menu);
+    delwin(this->lyrics_win);
+    delete this->menu_items;
+}
+
+void Lrc_interface::run(void) {
+    // setup the interface
+    interface_setup();
+
+    int action;
+    while (this->generator.is_running()) {
+        draw_menu();
+        draw_content();
+    }
+}
+
+void Lrc_interface::draw_menu(void) {
+    // update the menu items
+    this->menu_items = generator.send_menu_items();
+    if (this->menu_items == nullptr) {
+        // TODO: wclear?
+        return;
+    }
+
     const int hoff = 1;
     const int woff = 1;
     // draw options on the menu window
@@ -24,14 +58,78 @@ void Lrc_generator::draw_menu(void) {
     wstandout(this->menu);
     mvwaddstr(this->menu, hoff, woff, "Menu");
     wstandend(this->menu);
-    int i;
-    for (i = 1; i <= opts; i++) {
-        mvwprintw(this->menu, i + hoff, woff, "%d: %s\n", i - 1,
-                  menu_items[i - 1].c_str());
+    unsigned int i;
+    for (auto item : this->menu_items) {
+        mvwprintw(this->menu, i + hoff, woff, "[%s] => %s", std::get<0>(item), std::get<1>(item));
     }
-    mvwaddstr(this->menu, i + hoff, woff, "other keys: Quit\n");
     box(this->menu, 0, 0);
     wrefresh(this->menu);
+}
+
+void Lrc_interface::draw_content() {
+    // gets content from the model
+    vector<string> content = this->model.send_content();
+
+    // offsets from the window border
+    const int hoff = 2;
+    const int woff = 2;
+    int height, width;
+    getmaxyx(this->lyrics_win, height, width);
+
+    const size_t slider_sz = 50;
+    const float volume_step = 2.0f;
+    string vol_slider = string(slider_sz, '-');
+    vol_slider.insert(0, 1, '[');
+    vol_slider.push_back(']');
+
+    // dummy variable
+    int c;
+
+    wclear(this->lyrics_win);
+    box(this->lyrics_win, 0, 0);
+    // display the current line being synchronized and the next one on stdout
+    // or print "(null)" if the line is empty
+    unsigned int i = 0;
+    for (string s : content) {
+        mvwaddstr(this->lyrics_win, hoff + i, woff, (s.empty() ? "(null)" : s.c_str()));
+    }
+    
+    //mvwprintw(this->lyrics_win, hoff + 4, woff, "Last timestamp [%d.%d s]",
+    //          tot_playback.count() / 1000, (tot_playback.count() / 10) % 100);
+    float vol = this->model.send_volume();
+    mvwprintw(this->lyrics_win, hoff + 5, woff, "volume: %.0f%%", vol);
+    size_t vol_level = (int)std::max(0.0, vol / 2.0);
+    vol_slider.replace(1, slider_sz, slider_sz, '-');
+    vol_slider.replace(1, vol_level, vol_level, '#');
+    mvwaddstr(this->lyrics_win, hoff + 6, woff, vol_slider.c_str());
+
+    // bottom command cheatsheet
+    mvwaddstr(this->lyrics_win, height - 4, woff, "space: pause");
+    mvwaddstr(this->lyrics_win, height - 3, woff,
+              "'s: restart synchronization");
+    mvwaddstr(this->lyrics_win, height - 2, woff,
+              "any other key: advance to the next line");
+    wrefresh(this->lyrics_win);
+
+    // blocks until a character is pressed
+    c = wgetch(this->lyrics_win);
+    // then sends it to the model
+    this->model.receive_key(c);
+
+    /*wclear(this->lyrics_win);
+            box(this->lyrics_win, 0, 0);
+            wstandout(this->lyrics_win);
+            std::string_view pause = "PAUSED";
+            std::string_view resume = "(press any key to resume)";
+            mvwaddstr(this->lyrics_win, height / 2, width / 2 - pause.length() / 2,
+                      pause.data());
+            wstandend(this->lyrics_win);
+            mvwaddstr(this->lyrics_win, height / 2 + 1,
+                      width / 2 - resume.length() / 2, resume.data());
+            wrefresh(this->lyrics_win);
+            // waits for a key press to resume
+            c = wgetch(this->lyrics_win);*/
+    
 }
 
 void Lrc_generator::set_attr_dialog(std::string attr) {

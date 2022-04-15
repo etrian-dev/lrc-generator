@@ -30,6 +30,9 @@ using MilliSecs = std::chrono::milliseconds;
 // constructor taking an input and an output filenames as std::string
 Lrc_generator::Lrc_generator(fs::path &in_file, fs::path &out_file,
                              fs::path &song_path) {
+    // initialize the generator's state to "MENU"
+    this->state = GeneratorState.MENU;
+
     // open an input and an output stream with the filenames specified
     std::ifstream input_stream = std::ifstream(in_file, std::ios_base::in);
     this->output_stream = std::ofstream(out_file, std::ios_base::out);
@@ -50,12 +53,14 @@ Lrc_generator::Lrc_generator(fs::path &in_file, fs::path &out_file,
         if (line.empty()) {
             continue;
         }
-        this->lyrics.push_back(std::move(line));
+        this->lrc_lines.push_back(Line(line));
     }
 
     this->metadata = vector<string>();
 
     this->songfile = song_path;
+
+    this->menu_mutex = std::mutex();
 
     if (input_stream.eof()) {
         input_stream.close();
@@ -75,17 +80,42 @@ Lrc_generator::~Lrc_generator() {
     this->output_stream.close();
 }
 
+bool Lrc_generator::is_running(void) {
+    return this->state != GeneratorState.QUITTING;
+}
+
+vector<std::tuple<string, string>> main_menu {
+    std::make_tuple("0"s, "sync"s),
+    std::make_tuple("1"s, "preview"s),
+    std::make_tuple("1"s, "preview"s),
+    std::make_tuple("2"s, "set title"s),
+    std::make_tuple("3"s, "set album"s),
+    std::make_tuple("4"s, "set artist"s),
+    std::make_tuple("5"s, "set subtitle creator"s)
+};
+
+vector<std::tuple<string, string>> Lrc_generator::send_menu_items(void) {
+    switch (this->state) {
+        case GeneratorState.MENU:
+            return main_menu;
+        case GeneratorState.SYNCING:
+        case GeneratorState.PREWIEW:
+        case GeneratorState.METADATA:
+        case GeneratorState.QUITTING:
+        default:
+            return nullptr;
+    }
+}
+
 // function to sync the lyrics to the song
 void Lrc_generator::sync(void) {
     Clock clock;
     std::chrono::time_point<Clock> line_start_tp, current_tp;
-    // this duration object stores the time spent in song playback (accounting for
-    // pauses) Its value is written on the lrc file when the user marks the
+    // this duration object stores the time spent in song playback 
+    // (accounting for pauses). 
+    // Its value is written on the lrc file when the user marks the
     // beginning of a new line
     MilliSecs tot_playback = MilliSecs::zero();
-
-    // dummy variable
-    int c;
 
     // load the song in a sf::Music object
     // it's a stream, so it must not be destroyed as long as it's being played
@@ -95,21 +125,8 @@ void Lrc_generator::sync(void) {
     if (!song.openFromFile(this->songfile.string())) {
         std::cerr << "Failed to open the song file at \"" << this->songfile
                   << "\"\n";
+        return;
     }
-
-    // offsets from the window border
-    const int hoff = 2;
-    const int woff = 2;
-    int height, width;
-    getmaxyx(this->lyrics_win, height, width);
-    // enable the keypad for KEY_UP/DOWN
-    keypad(this->lyrics_win, true);
-
-    const size_t slider_sz = 50;
-    const float volume_step = 2.0f;
-    string vol_slider = string(slider_sz, '-');
-    vol_slider.insert(0, 1, '[');
-    vol_slider.push_back(']');
 
     // current previous and next line in the lyrics
     string prev;
@@ -122,7 +139,7 @@ void Lrc_generator::sync(void) {
     // THE SONG (IF LOADED) STARTS PLAYING
     // does not loop when the end is reached by default
     song.play();
-    float vol = song.getVolume();
+    this->volume = song.getVolume();
     // stores the initial timepoint
     line_start_tp = clock.now();
 
@@ -139,56 +156,27 @@ void Lrc_generator::sync(void) {
 
         // Synchronize the current line
         // formatted as [mm:ss.centsecond]<line>
-        string str_timestamp =
+        this->lrc_lines.push_back(new Line(current, tot_playback.count()));
+        /*string str_timestamp =
             "[" + std::to_string((tot_playback.count() / 60000) % 60000) + ":" +
             std::to_string((tot_playback.count() / 1000) % 60) + "." +
             std::to_string((tot_playback.count() / 10) % 100) + "]";
         this->lrc_text.push_back(str_timestamp);
-        this->delays.push_back(tot_playback.count());
+        this->delays.push_back(tot_playback.count());*/
 
-        wclear(this->lyrics_win);
-        box(this->lyrics_win, 0, 0);
-        // display the current line being synchronized and the next one on stdout
-        // or print "(null)" if the line is empty
-        mvwaddstr(this->lyrics_win, hoff, woff,
-                  (prev.empty() ? "(null)" : prev.c_str()));
-        wattron(this->lyrics_win, A_BOLD);
-        mvwaddstr(this->lyrics_win, hoff + 1, woff,
-                  (current.empty() ? "(null)" : current.c_str()));
-        wattroff(this->lyrics_win, A_BOLD);
-        mvwaddstr(this->lyrics_win, hoff + 2, woff,
-                  (next.empty() ? "(null)" : next.c_str()));
-        mvwprintw(this->lyrics_win, hoff + 4, woff, "Last timestamp [%d.%d s]",
-                  tot_playback.count() / 1000, (tot_playback.count() / 10) % 100);
-
-        mvwprintw(this->lyrics_win, hoff + 5, woff, "volume: %.0f%%", vol);
-        size_t vol_level = (int)std::max(0.0, vol / 2.0);
-        vol_slider.replace(1, slider_sz, slider_sz, '-');
-        vol_slider.replace(1, vol_level, vol_level, '#');
-        mvwaddstr(this->lyrics_win, hoff + 6, woff, vol_slider.c_str());
-
-        // bottom command cheatsheet
-        mvwaddstr(this->lyrics_win, height - 4, woff, "space: pause");
-        mvwaddstr(this->lyrics_win, height - 3, woff,
-                  "'s: restart synchronization");
-        mvwaddstr(this->lyrics_win, height - 2, woff,
-                  "any other key: advance to the next line");
-        wrefresh(this->lyrics_win);
-
-        // blocks until a character is pressed
-        c = wgetch(this->lyrics_win);
-
+        
+        int c;
         if (c == KEY_UP) {
-            vol = std::min(100.0f, vol + volume_step);
-            song.setVolume(vol);
-            vol = song.getVolume();
+            this->volume = std::min(100.0f, this->volume + volume_step);
+            song.setVolume(this->volume);
+            this->volume = song.getVolume();
             current = prev;
             continue;
         }
         if (c == KEY_DOWN) {
-            vol = std::max(0.0f, vol - volume_step);
-            song.setVolume(vol);
-            vol = song.getVolume();
+            this->volume = std::max(0.0f, this->volume - volume_step);
+            song.setVolume(this->volume);
+            this->volume = song.getVolume();
             current = prev;
             continue;
         }
@@ -201,19 +189,7 @@ void Lrc_generator::sync(void) {
                 std::chrono::duration_cast<MilliSecs>(clock.now() - line_start_tp);
             // pause the audio track and
             song.pause();
-            wclear(this->lyrics_win);
-            box(this->lyrics_win, 0, 0);
-            wstandout(this->lyrics_win);
-            std::string_view pause = "PAUSED";
-            std::string_view resume = "(press any key to resume)";
-            mvwaddstr(this->lyrics_win, height / 2, width / 2 - pause.length() / 2,
-                      pause.data());
-            wstandend(this->lyrics_win);
-            mvwaddstr(this->lyrics_win, height / 2 + 1,
-                      width / 2 - resume.length() / 2, resume.data());
-            wrefresh(this->lyrics_win);
-            // waits for a key press to resume
-            c = wgetch(this->lyrics_win);
+            
             // the time point at the end of a pause is the new starting point for the
             // line
             line_start_tp = clock.now();

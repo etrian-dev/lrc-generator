@@ -8,57 +8,61 @@
 #include <fstream>
 #include <string>
 #include <vector>
-// ncurses header
-#include <ncurses.h>
+#include <mutex>
 
 // Version definition
 #define VERSION "0.1.1"
 
 namespace fs = std::filesystem;
-using std::string;
+using std::string_view;
 using std::vector;
 
-// simple class as a wrapper for routines for setting up
-// the .lrc file
+enum GeneratorState {
+  MENU,
+  SYNCING,
+  PREWIEW,
+  METADATA,
+  QUITTING
+};
+
+// This class represents the data model for the generator
 class Lrc_generator {
 private:
+  // the generator's state
+  GeneratorState state;
+
   // the output text stream to write to
   std::ofstream output_stream;
 
-  // the song's text
-  vector<string> lyrics;
+  // the synchronized output lines
+  vector<Line> lrc_lines;
 
   // metadata to be written at the top of the output file
   vector<string> metadata;
-  // Synchronized to be written to the output file
-  vector<string> lrc_text;
-  vector<uint_fast64_t> delays;
 
-  // music stream filename
+  // music stream file path
   fs::path songfile;
+
+  float volume;
 
   // interactively sync the lyrics to the song
   void sync(void);
-  // preview the sycnhronized lyrics (iff the function above has been already
-  // run)
+  // preview the sycnhronized lyrics (iff already sync'd)
   void preview_lrc(void);
-
-  // TUI functions & variables
-  WINDOW *menu;
-  WINDOW *lyrics_win;
-  int height;
-  int width;
-  void interface_setup(void);
-  // utility function to draw the menu
-  void draw_menu(void);
-  // creates a dialog to set the chosen attribute
-  void set_attr_dialog(string attr);
-  // displays a simple choiche dialog
-  char choice_dialog(string msg);
 
 public:
   // interactive menu (tui) used for setting parameters and syncing
   void run(void);
+
+  bool is_running(void);
+  // send menu item updates to the interface
+  vector<string> send_menu_items(void);
+  // send content updates
+  vector<string> send_content(void);
+  // send song volume level
+  float send_volume(void);
+  // receive key pressed
+  void receive_key(int key);
 
   // constructor taking an input file and an output file
   Lrc_generator(fs::path &in_file, fs::path &out_file, fs::path &song_fname);

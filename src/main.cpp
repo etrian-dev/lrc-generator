@@ -1,14 +1,16 @@
 // header file for the generator class
 #include "../headers/lrc-generator.h"
+#include "../headers/lrc-interface.hpp"
 // header file for arg parsing
 #include "../headers/cxxopts.hpp"
-// curses library
-#include <ncurses.h>
 // other standard lib headers
 #include <filesystem>
 #include <iostream>
 #include <string>
 #include <tuple>
+#include <thread>
+// curses library
+#include <ncurses.h>
 
 namespace fs = std::filesystem;
 
@@ -123,11 +125,16 @@ int main(int argc, const char **argv) {
     // This is better done before the initialization of curses, so that the
     // terminal does not get garbled by ncurses
     Lrc_generator generator(lyrics_path, lrc_path, audio_path);
+    Lrc_interface interface(generator);
 
     // initialize the curses library for immediate input and keypad enabled
     init_ncurses();
 
-    generator.run(); // main program loop (menu)
+    std::thread generator_th = std::thread(generator.run());
+    std::thread interface_th = std::thread(interface.run());
+
+    generator_th.join();
+    interface_th.join();
 
     // does the cleanup
     cleanup_ncurses();
