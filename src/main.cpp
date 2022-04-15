@@ -1,6 +1,7 @@
 // header file for the generator class
 #include "../headers/lrc-generator.h"
 #include "../headers/lrc-interface.hpp"
+#include "../headers/spsc.hpp"
 // header file for arg parsing
 #include "../headers/cxxopts.hpp"
 // other standard lib headers
@@ -130,8 +131,14 @@ int main(int argc, const char **argv) {
     // initialize the curses library for immediate input and keypad enabled
     init_ncurses();
 
-    std::thread generator_th = std::thread(generator.run());
-    std::thread interface_th = std::thread(interface.run());
+    // creates queues for all the events
+    Spsc_queue<int> key_queue = Spsc_queue<int>(10);
+    Spsc_queue<float> vol_queue = Spsc_queue<float>(2);
+    Spsc_queue<vector<string>> content_queue= Spsc_queue<vector<string>>(10);
+    Spsc_queue<vector<std::tuple<string, string>>> menu_queue= Spsc_queue<vector<std::tuple<string, string>> >(10);
+
+    std::thread generator_th = std::thread(generator.run(), std::ref(key_queue), std::ref(vol_queue), std::ref(content_queue), std::ref(menu_queue));
+    std::thread interface_th = std::thread(interface.run(), std::ref(key_queue), std::ref(vol_queue), std::ref(content_queue), std::ref(menu_queue));
 
     generator_th.join();
     interface_th.join();

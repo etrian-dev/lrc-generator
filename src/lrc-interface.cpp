@@ -1,5 +1,6 @@
 // header file for the generator class
 #include "../headers/lrc-generator.h"
+#include "../headers/spsc.hpp"
 #include <tuple>
 // C-style asserts
 #include <cassert>
@@ -32,7 +33,7 @@ Lrc_interface::~Lrc_interface(void) {
     delete this->menu_items;
 }
 
-void Lrc_interface::run(void) {
+void Lrc_interface::run(Spsc_queue<int>& key_q, Spsc_queue<float>& vol_q, Spsc_queue<vector<string>>& content_q, Spsc_queue<std::tuple<string, string>>>& menu_q) {
     // setup the interface
     interface_setup();
 
@@ -93,7 +94,7 @@ void Lrc_interface::draw_content() {
     for (string s : content) {
         mvwaddstr(this->lyrics_win, hoff + i, woff, (s.empty() ? "(null)" : s.c_str()));
     }
-    
+
     //mvwprintw(this->lyrics_win, hoff + 4, woff, "Last timestamp [%d.%d s]",
     //          tot_playback.count() / 1000, (tot_playback.count() / 10) % 100);
     float vol = this->model.send_volume();
@@ -129,7 +130,7 @@ void Lrc_interface::draw_content() {
             wrefresh(this->lyrics_win);
             // waits for a key press to resume
             c = wgetch(this->lyrics_win);*/
-    
+
 }
 
 void Lrc_generator::set_attr_dialog(std::string attr) {

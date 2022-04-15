@@ -1,5 +1,6 @@
 // my headers
 #include "../headers/lrc-generator.h"
+#include "../headers/spsc.hpp"
 #include "../headers/line.h"
 // SFML headers for music playback
 #include <SFML/Audio.hpp>
@@ -96,14 +97,14 @@ vector<std::tuple<string, string>> main_menu {
 
 vector<std::tuple<string, string>> Lrc_generator::send_menu_items(void) {
     switch (this->state) {
-        case GeneratorState.MENU:
-            return main_menu;
-        case GeneratorState.SYNCING:
-        case GeneratorState.PREWIEW:
-        case GeneratorState.METADATA:
-        case GeneratorState.QUITTING:
-        default:
-            return nullptr;
+    case GeneratorState.MENU:
+        return main_menu;
+    case GeneratorState.SYNCING:
+    case GeneratorState.PREWIEW:
+    case GeneratorState.METADATA:
+    case GeneratorState.QUITTING:
+    default:
+        return nullptr;
     }
 }
 
@@ -111,8 +112,8 @@ vector<std::tuple<string, string>> Lrc_generator::send_menu_items(void) {
 void Lrc_generator::sync(void) {
     Clock clock;
     std::chrono::time_point<Clock> line_start_tp, current_tp;
-    // this duration object stores the time spent in song playback 
-    // (accounting for pauses). 
+    // this duration object stores the time spent in song playback
+    // (accounting for pauses).
     // Its value is written on the lrc file when the user marks the
     // beginning of a new line
     MilliSecs tot_playback = MilliSecs::zero();
@@ -164,7 +165,7 @@ void Lrc_generator::sync(void) {
         this->lrc_text.push_back(str_timestamp);
         this->delays.push_back(tot_playback.count());*/
 
-        
+
         int c;
         if (c == KEY_UP) {
             this->volume = std::min(100.0f, this->volume + volume_step);
@@ -189,7 +190,7 @@ void Lrc_generator::sync(void) {
                 std::chrono::duration_cast<MilliSecs>(clock.now() - line_start_tp);
             // pause the audio track and
             song.pause();
-            
+
             // the time point at the end of a pause is the new starting point for the
             // line
             line_start_tp = clock.now();
@@ -288,7 +289,7 @@ void Lrc_generator::preview_lrc(void) {
 }
 
 // the menu loop presented by the class to the user
-void Lrc_generator::run(void) {
+void Lrc_generator::run(Spsc_queue<int>& key_q, Spsc_queue<float>& vol_q, Spsc_queue<vector<string>>& content_q, Spsc_queue<std::tuple<string, string>>>& menu_q) {
     // setup the interface
     interface_setup();
 
