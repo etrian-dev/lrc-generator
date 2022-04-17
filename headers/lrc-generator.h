@@ -21,7 +21,7 @@ using std::vector;
 enum GeneratorState {
     MENU,
     SYNCING,
-    PREWIEW,
+    PREVIEW,
     METADATA,
     QUITTING
 };
@@ -35,6 +35,9 @@ private:
     // the output text stream to write to
     std::ofstream output_stream;
 
+    // the song's lyrics
+    vector<string> lyrics;
+
     // the synchronized output lines
     vector<Line> lrc_lines;
 
@@ -47,23 +50,29 @@ private:
     float volume;
 
     // interactively sync the lyrics to the song
-    void sync(void);
+    void sync(
+        Spsc_queue<int>& key_q,
+        Spsc_queue<vector<string>>& content_q);
     // preview the sycnhronized lyrics (iff already sync'd)
-    void preview_lrc(void);
+    void preview_lrc(
+        Spsc_queue<int>& key_q,
+        Spsc_queue<vector<string>>& content_q);
+    // Sets metadata
+    void set_metadata(
+        Spsc_queue<int>& key_q,
+        Spsc_queue<vector<string>>& content_q);
 
 public:
     // interactive menu (tui) used for setting parameters and syncing
-    void run(Spsc_queue<int>& key_q, Spsc_queue<float>& vol_q, Spsc_queue<vector<string>>& content_q, Spsc_queue<std::tuple<string, string>>>& menu_q);
+    void run(
+        Spsc_queue<int>& key_q, 
+        Spsc_queue<vector<string>>& content_q, 
+        Spsc_queue<vector<std::tuple<string, string>>>& menu_q);
 
     bool is_running(void);
-    // send menu item updates to the interface
-    vector<string> send_menu_items(void);
-    // send content updates
-    vector<string> send_content(void);
-    // send song volume level
-    float send_volume(void);
-    // receive key pressed
-    void receive_key(int key);
+    GeneratorState getState(void) {
+        return this->state;
+    }
 
     // constructor taking an input file and an output file
     Lrc_generator(fs::path &in_file, fs::path &out_file, fs::path &song_fname);

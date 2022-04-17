@@ -1,5 +1,6 @@
 // header file for the generator class
 #include "../headers/lrc-generator.h"
+#include "../headers/lrc-interface.hpp"
 #include "../headers/spsc.hpp"
 #include <tuple>
 // C-style asserts
@@ -7,7 +8,7 @@
 // curses library
 #include <ncurses.h>
 
-Lrc_interface::Lrc_interface(Lrc_generator& generator) {
+Lrc_interface::Lrc_interface(Lrc_generator* generator) {
     // Sets the reference to the generator object
     this->model = generator;
     // splits the terminal: a left section with a menu and a right one with the
@@ -15,9 +16,11 @@ Lrc_interface::Lrc_interface(Lrc_generator& generator) {
     getmaxyx(stdscr, this->max_height, this->max_width);
     this->menu = newwin(this->max_height, this->max_width / 2, 0, 0);
     this->lyrics_win = newwin(this->max_height, this->max_width / 2, 0, this->max_width / 2);
-    this->menu_items = new vector<string>();
-    assert(this->menu != NULL);
-    assert(this->lyrics_win != NULL);
+
+    // the OK constant is defined in ncurses.h
+    assert(this->menu == OK);
+    assert(this->lyrics_win == OK);
+
     // enable the keypad for KEY_UP/DOWN
     keypad(this->lyrics_win, true);
 }
@@ -30,27 +33,29 @@ Lrc_interface::~Lrc_interface(void) {
 
     delwin(this->menu);
     delwin(this->lyrics_win);
-    delete this->menu_items;
 }
 
-void Lrc_interface::run(Spsc_queue<int>& key_q, Spsc_queue<float>& vol_q, Spsc_queue<vector<string>>& content_q, Spsc_queue<std::tuple<string, string>>>& menu_q) {
-    // setup the interface
-    interface_setup();
+void Lrc_interface::run(
+    Spsc_queue<int>& key_q, 
+    Spsc_queue<vector<string>>& content_q, 
+    Spsc_queue<vector<std::tuple<string, string>>>& menu_q) {
 
     int action;
-    while (this->generator.is_running()) {
-        draw_menu();
-        draw_content();
+    while (this->model->is_running()) {
+        draw_menu(menu_q);
+        if(this->model->getState() != GeneratorState::MENU) {
+            draw_content(content_q);
+        }
+
+        action = wgetch(this->menu);
+        key_q.produce(action);
     }
 }
 
-void Lrc_interface::draw_menu(void) {
+void Lrc_interface::draw_menu(Spsc_queue<vector<std::tuple<string, string>>>& menu_q) {
     // update the menu items
-    this->menu_items = generator.send_menu_items();
-    if (this->menu_items == nullptr) {
-        // TODO: wclear?
-        return;
-    }
+    this->menu_items = menu_q.consume();
+    // TODO: check valid with assert?
 
     const int hoff = 1;
     const int woff = 1;
@@ -59,7 +64,7 @@ void Lrc_interface::draw_menu(void) {
     wstandout(this->menu);
     mvwaddstr(this->menu, hoff, woff, "Menu");
     wstandend(this->menu);
-    unsigned int i;
+    unsigned int i = 0;
     for (auto item : this->menu_items) {
         mvwprintw(this->menu, i + hoff, woff, "[%s] => %s", std::get<0>(item), std::get<1>(item));
     }
@@ -67,24 +72,17 @@ void Lrc_interface::draw_menu(void) {
     wrefresh(this->menu);
 }
 
-void Lrc_interface::draw_content() {
+void Lrc_interface::draw_content(
+    Spsc_queue<vector<string>>& content_q) {
+
     // gets content from the model
-    vector<string> content = this->model.send_content();
+    vector<string> content = content_q.consume();
 
     // offsets from the window border
     const int hoff = 2;
     const int woff = 2;
     int height, width;
     getmaxyx(this->lyrics_win, height, width);
-
-    const size_t slider_sz = 50;
-    const float volume_step = 2.0f;
-    string vol_slider = string(slider_sz, '-');
-    vol_slider.insert(0, 1, '[');
-    vol_slider.push_back(']');
-
-    // dummy variable
-    int c;
 
     wclear(this->lyrics_win);
     box(this->lyrics_win, 0, 0);
@@ -95,45 +93,17 @@ void Lrc_interface::draw_content() {
         mvwaddstr(this->lyrics_win, hoff + i, woff, (s.empty() ? "(null)" : s.c_str()));
     }
 
+    // Last timestamp
     //mvwprintw(this->lyrics_win, hoff + 4, woff, "Last timestamp [%d.%d s]",
     //          tot_playback.count() / 1000, (tot_playback.count() / 10) % 100);
-    float vol = this->model.send_volume();
-    mvwprintw(this->lyrics_win, hoff + 5, woff, "volume: %.0f%%", vol);
-    size_t vol_level = (int)std::max(0.0, vol / 2.0);
-    vol_slider.replace(1, slider_sz, slider_sz, '-');
-    vol_slider.replace(1, vol_level, vol_level, '#');
-    mvwaddstr(this->lyrics_win, hoff + 6, woff, vol_slider.c_str());
 
-    // bottom command cheatsheet
-    mvwaddstr(this->lyrics_win, height - 4, woff, "space: pause");
-    mvwaddstr(this->lyrics_win, height - 3, woff,
-              "'s: restart synchronization");
-    mvwaddstr(this->lyrics_win, height - 2, woff,
-              "any other key: advance to the next line");
+    
     wrefresh(this->lyrics_win);
 
-    // blocks until a character is pressed
-    c = wgetch(this->lyrics_win);
-    // then sends it to the model
-    this->model.receive_key(c);
-
-    /*wclear(this->lyrics_win);
-            box(this->lyrics_win, 0, 0);
-            wstandout(this->lyrics_win);
-            std::string_view pause = "PAUSED";
-            std::string_view resume = "(press any key to resume)";
-            mvwaddstr(this->lyrics_win, height / 2, width / 2 - pause.length() / 2,
-                      pause.data());
-            wstandend(this->lyrics_win);
-            mvwaddstr(this->lyrics_win, height / 2 + 1,
-                      width / 2 - resume.length() / 2, resume.data());
-            wrefresh(this->lyrics_win);
-            // waits for a key press to resume
-            c = wgetch(this->lyrics_win);*/
-
+    // TODO: wgetch(tyrics_win) and key_q.produce()?
 }
 
-void Lrc_generator::set_attr_dialog(std::string attr) {
+/*void Lrc_generator::set_attr_dialog(std::string attr) {
     WINDOW *dialog = newwin(4, 50, 20, 50);
     bool not_ok = true;
     char value[20] = {0};
@@ -208,4 +178,4 @@ char Lrc_generator::choice_dialog(std::string msg) {
     delwin(dialog);
 
     return c;
-}
+}*/

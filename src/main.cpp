@@ -79,6 +79,22 @@ std::vector<string> parse_args(int argc, const char **argv) {
     return files;
 }
 
+void wrapper_run_generator(
+    Lrc_generator gen,
+    Spsc_queue<int>& key_q, 
+    Spsc_queue<vector<string>>& content_q,
+    Spsc_queue<vector<std::tuple<string, string>>>& menu_q) {
+    gen.run(key_q, content_q, menu_q);
+}
+
+void wrapper_run_interface(
+    Lrc_interface interface,
+    Spsc_queue<int>& key_q, 
+    Spsc_queue<vector<string>>& content_q,
+    Spsc_queue<vector<std::tuple<string, string>>>& menu_q) {
+    interface.run(key_q, content_q, menu_q);
+}
+
 int main(int argc, const char **argv) {
     std::vector<string> files = parse_args(argc, argv);
     if (files.size() == 0) {
@@ -126,19 +142,29 @@ int main(int argc, const char **argv) {
     // This is better done before the initialization of curses, so that the
     // terminal does not get garbled by ncurses
     Lrc_generator generator(lyrics_path, lrc_path, audio_path);
-    Lrc_interface interface(generator);
+    Lrc_interface interface(&generator);
 
     // initialize the curses library for immediate input and keypad enabled
     init_ncurses();
 
     // creates queues for all the events
     Spsc_queue<int> key_queue = Spsc_queue<int>(10);
-    Spsc_queue<float> vol_queue = Spsc_queue<float>(2);
     Spsc_queue<vector<string>> content_queue= Spsc_queue<vector<string>>(10);
-    Spsc_queue<vector<std::tuple<string, string>>> menu_queue= Spsc_queue<vector<std::tuple<string, string>> >(10);
+    Spsc_queue<vector<std::tuple<string, string>>> menu_queue= Spsc_queue<vector<std::tuple<string, string>>>(10);
 
-    std::thread generator_th = std::thread(generator.run(), std::ref(key_queue), std::ref(vol_queue), std::ref(content_queue), std::ref(menu_queue));
-    std::thread interface_th = std::thread(interface.run(), std::ref(key_queue), std::ref(vol_queue), std::ref(content_queue), std::ref(menu_queue));
+    // FIXME: cannot use member func as thread function, maybe create a wrapper in main.cpp
+    std::thread generator_th = std::thread(
+        &Lrc_generator::run, 
+        &generator,
+        std::ref(key_queue), 
+        std::ref(content_queue), 
+        std::ref(menu_queue));
+    std::thread interface_th = std::thread(
+        &Lrc_interface::run,
+        &interface,
+        std::ref(key_queue), 
+        std::ref(content_queue), 
+        std::ref(menu_queue));
 
     generator_th.join();
     interface_th.join();

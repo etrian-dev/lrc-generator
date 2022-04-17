@@ -21,6 +21,7 @@
 #include <utility> // to use std::move, used to move-construct a stream
 
 namespace ns = std::filesystem;
+using namespace std::string_literals;
 using std::string;
 using std::vector;
 
@@ -31,8 +32,6 @@ using MilliSecs = std::chrono::milliseconds;
 // constructor taking an input and an output filenames as std::string
 Lrc_generator::Lrc_generator(fs::path &in_file, fs::path &out_file,
                              fs::path &song_path) {
-    // initialize the generator's state to "MENU"
-    this->state = GeneratorState.MENU;
 
     // open an input and an output stream with the filenames specified
     std::ifstream input_stream = std::ifstream(in_file, std::ios_base::in);
@@ -54,62 +53,52 @@ Lrc_generator::Lrc_generator(fs::path &in_file, fs::path &out_file,
         if (line.empty()) {
             continue;
         }
-        this->lrc_lines.push_back(Line(line));
+        this->lyrics.push_back(line);
     }
 
     this->metadata = vector<string>();
 
-    this->songfile = song_path;
+    // TODO: get Music's lenght with sf::Music.getDuration().asSecods()
 
-    this->menu_mutex = std::mutex();
+    this->songfile = song_path;
 
     if (input_stream.eof()) {
         input_stream.close();
     }
+    
+    // initialize the generator's state to "MENU"
+    this->state = GeneratorState::MENU;
 }
 
 Lrc_generator::~Lrc_generator() {
-    size_t i;
     // write the metadata (if any) first
     for (auto ln : this->metadata) {
-        this->output_stream << ln << '\n';
+        this->output_stream << "[" << ln << "]\n";
     }
-    for (i = 0; i < this->lrc_text.size(); i++) {
-        // first append the time point
-        this->output_stream << this->lrc_text[i] << this->lyrics[i] << '\n';
+    for(auto line : this->lrc_lines) {
+        string str_timestamp =
+            "[" + std::to_string((line.get_delay() / 60000) % 60000) + ":" +
+            std::to_string((line.get_delay() / 1000) % 60) + "." +
+            std::to_string((line.get_delay() / 10) % 100) + "]";
+        this->output_stream << str_timestamp << line.get_text() << "\n";
     }
     this->output_stream.close();
 }
 
 bool Lrc_generator::is_running(void) {
-    return this->state != GeneratorState.QUITTING;
+    return this->state != GeneratorState::QUITTING;
 }
 
-vector<std::tuple<string, string>> main_menu {
-    std::make_tuple("0"s, "sync"s),
-    std::make_tuple("1"s, "preview"s),
-    std::make_tuple("1"s, "preview"s),
-    std::make_tuple("2"s, "set title"s),
-    std::make_tuple("3"s, "set album"s),
-    std::make_tuple("4"s, "set artist"s),
-    std::make_tuple("5"s, "set subtitle creator"s)
+vector<string> pause_resume {
+    "PAUSED"s,
+    "(press any key to resume)"s
 };
 
-vector<std::tuple<string, string>> Lrc_generator::send_menu_items(void) {
-    switch (this->state) {
-    case GeneratorState.MENU:
-        return main_menu;
-    case GeneratorState.SYNCING:
-    case GeneratorState.PREWIEW:
-    case GeneratorState.METADATA:
-    case GeneratorState.QUITTING:
-    default:
-        return nullptr;
-    }
-}
-
 // function to sync the lyrics to the song
-void Lrc_generator::sync(void) {
+void Lrc_generator::sync(
+    Spsc_queue<int>& key_q,
+    Spsc_queue<vector<string>>& content_q) {
+
     Clock clock;
     std::chrono::time_point<Clock> line_start_tp, current_tp;
     // this duration object stores the time spent in song playback
@@ -141,6 +130,16 @@ void Lrc_generator::sync(void) {
     // does not loop when the end is reached by default
     song.play();
     this->volume = song.getVolume();
+
+    const size_t slider_sz = 50;
+    const float volume_step = 2.0f;
+    string vol_str = "volume: "s;
+    string vol_slider = string(slider_sz, '-');
+    vol_slider.insert(0, 1, '[');
+    vol_slider.push_back(']');
+
+    vector<string> content;
+
     // stores the initial timepoint
     line_start_tp = clock.now();
 
@@ -157,7 +156,7 @@ void Lrc_generator::sync(void) {
 
         // Synchronize the current line
         // formatted as [mm:ss.centsecond]<line>
-        this->lrc_lines.push_back(new Line(current, tot_playback.count()));
+        this->lrc_lines.push_back(Line(current, tot_playback.count()));
         /*string str_timestamp =
             "[" + std::to_string((tot_playback.count() / 60000) % 60000) + ":" +
             std::to_string((tot_playback.count() / 1000) % 60) + "." +
@@ -165,8 +164,21 @@ void Lrc_generator::sync(void) {
         this->lrc_text.push_back(str_timestamp);
         this->delays.push_back(tot_playback.count());*/
 
+        // Update the volume slider
+        size_t vol_level = (size_t)std::max(0.0, this->volume / 2.0);
+        vol_slider.replace(1, slider_sz, slider_sz, '-');
+        vol_slider.replace(1, vol_level, vol_level, '#');
 
-        int c;
+        // Send content lines
+        content.push_back(prev);
+        content.push_back(current);
+        content.push_back(next);
+        content.push_back(vol_str + std::to_string(this->volume));
+        content.push_back(vol_slider);
+        content_q.produce(content);
+        content.clear(); // clear it
+
+        int c = key_q.consume();
         if (c == KEY_UP) {
             this->volume = std::min(100.0f, this->volume + volume_step);
             song.setVolume(this->volume);
@@ -191,6 +203,9 @@ void Lrc_generator::sync(void) {
             // pause the audio track and
             song.pause();
 
+            content_q.produce(pause_resume);
+            c = key_q.consume();
+
             // the time point at the end of a pause is the new starting point for the
             // line
             line_start_tp = clock.now();
@@ -204,8 +219,7 @@ void Lrc_generator::sync(void) {
 
             // stop the song, clear the output and reset the index and line
             song.stop();
-            this->lrc_text.clear();
-            this->delays.clear();
+            this->lrc_lines.clear();
             // reset the starting clock and the song duration offset
             tot_playback = MilliSecs::zero();
             idx = 0;
@@ -229,12 +243,14 @@ void Lrc_generator::sync(void) {
 
     // sync done, the song stops
     song.stop();
-    wclear(this->lyrics_win);
-    mvwprintw(this->lyrics_win, 0, 0, "Synchronization DONE\n");
 }
 
 // previews the synchronized lyrics
-void Lrc_generator::preview_lrc(void) {
+void Lrc_generator::preview_lrc(
+    Spsc_queue<int>& key_q,
+    Spsc_queue<vector<string>>& content_q
+) {
+    /*
     // offsets from the window border
     const int hoff = 2;
     const int woff = 2;
@@ -286,53 +302,142 @@ void Lrc_generator::preview_lrc(void) {
     song.stop();
 
     int x = wgetch(this->lyrics_win);
+    */
+    return;
 }
 
-// the menu loop presented by the class to the user
-void Lrc_generator::run(Spsc_queue<int>& key_q, Spsc_queue<float>& vol_q, Spsc_queue<vector<string>>& content_q, Spsc_queue<std::tuple<string, string>>>& menu_q) {
-    // setup the interface
-    interface_setup();
+void Lrc_generator::set_metadata(
+    Spsc_queue<int>& key_q,
+    Spsc_queue<vector<string>>& content_q) {
 
-    bool cont = true;
+    // Sets metadata fields
+    // available fields: ti, al, ar, by, length
+
+    bool keep_going = true;
     int action;
-    while (cont) {
-        // draws the menu
-        draw_menu();
-        // gets a character from the menu window and triggers the action accordingly
-        action = wgetch(this->menu);
-        switch (action - '0') {
+    // contains "set *" prompt and the current string typed by the user
+    vector<string> message;
+    do {
+        message.clear();
+        string metadata = "";
+        action = key_q.consume();
+        switch(action - '0') {
         case 0:
-            sync();
+            // set title
+            message.push_back("Set song title: "s);
+            content_q.produce(message);
+            metadata += "ti: ";
             break;
         case 1:
-            preview_lrc();
+            // set album
+            message.push_back("Set song album: "s);
+            content_q.produce(message);
+            metadata += "al: ";
             break;
         case 2:
-            set_attr_dialog("Song title");
+            // set artist
+            message.push_back("Set song artist: "s);
+            content_q.produce(message);
+            metadata += "ar: ";
             break;
         case 3:
-            set_attr_dialog("Song artist");
-            break;
-        case 4:
-            set_attr_dialog("Song album");
-            break;
-        case 5:
-            set_attr_dialog("Lrc creator");
+            // set subtitle creator
+            message.push_back("Set subtitle file creator: "s);
+            content_q.produce(message);
+            metadata += "by: ";
             break;
         default:
-            // quit the program
-            cont = false;
+            keep_going = false;
         }
+        if (keep_going) {
+            // get character from key key queue
+            while((action = key_q.consume()) != '\n') {
+                metadata += action;
+                // echo the partial metadata back to the user
+                // TODO: improve this, maybe do a little local work in the
+                // interface to avoid allocations and
+                // traffic on the queue for each character
+                message.push_back(metadata.substr(3, std::string::npos));
+                content_q.produce(message);
+                message.pop_back();
+            }
+            this->metadata.push_back(metadata);
+        }
+    } while(keep_going);
+}
 
-        // after the dialog is destroyed, clear & refresh all the windows
-        wclear(this->menu);
-        wclear(this->lyrics_win);
-        wrefresh(this->menu);
-        wrefresh(this->lyrics_win);
+vector<std::tuple<string, string>> main_menu {
+    std::make_tuple("0"s, "sync"s),
+    std::make_tuple("1"s, "preview"s),
+    std::make_tuple("2"s, "set metadata"s),
+    std::make_tuple("other keys"s, "quit"s)
+    
+};
+
+vector<std::tuple<string, string>> sync_menu {
+    std::make_tuple("\'' \'"s, "pause"s),
+    std::make_tuple("KEY_UP"s, "volume up"s),
+    std::make_tuple("KEY_DOWN"s, "volume down"s),
+    std::make_tuple("s"s, "restart"s),
+    std::make_tuple("other keys"s, "set timestamp"s)
+};
+
+vector<std::tuple<string, string>> preview_menu {
+    std::make_tuple("\'' \'"s, "pause"s),
+    std::make_tuple("s"s, "restart"s),
+};
+
+vector<std::tuple<string, string>> metadata_menu {
+    std::make_tuple("0"s, "set title"s),
+    std::make_tuple("1"s, "set album"s),
+    std::make_tuple("2"s, "set artist"s),
+    std::make_tuple("3"s, "set subtitle creator"s),
+    std::make_tuple("other keys"s, "return to main menu")
+};
+
+
+// the menu loop presented by the class to the user
+void Lrc_generator::run(
+    Spsc_queue<int>& key_q, 
+    Spsc_queue<vector<string>>& content_q, 
+    Spsc_queue<vector<std::tuple<string, string>>>& menu_q) {
+
+    this->state = GeneratorState::MENU;
+
+    int action;
+    while (this->state != GeneratorState::QUITTING) {
+        if(this->state == GeneratorState::MENU) {
+            menu_q.produce(main_menu);
+
+            // Gets an action from the interface
+            action = key_q.consume();
+
+            switch (action - '0') {
+            case 0:
+                // Set the state to syncing, update menu items
+                this->state = GeneratorState::SYNCING;
+                menu_q.produce(sync_menu);
+                sync(key_q, content_q);
+                this->state = GeneratorState::MENU;
+                break;
+            case 1:
+                // Set the state to preview, update menu items
+                this->state = GeneratorState::PREVIEW;
+                menu_q.produce(preview_menu);
+                preview_lrc(key_q, content_q);
+                this->state = GeneratorState::MENU;
+                break;
+            case 2:
+                // Set the state to metadata, update menu items
+                this->state = GeneratorState::METADATA;
+                menu_q.produce(metadata_menu);
+                set_metadata(key_q, content_q);
+                this->state = GeneratorState::MENU;
+                break;
+            default:
+                // quit the program
+                this->state = GeneratorState::QUITTING;
+            }
+        }
     }
-
-    delwin(this->menu);
-    delwin(this->lyrics_win);
-    // refreshes the standard screen
-    refresh();
 }

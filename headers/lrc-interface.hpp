@@ -23,20 +23,21 @@ private:
     vector<std::tuple<string, string>> menu_items;
 
 
-    void interface_setup(void);
     // utility function to draw the menu
-    void draw_menu(void);
+    void draw_menu(Spsc_queue<vector<std::tuple<string, string>>>& menu_q);
     // draw content
-    void draw_content();
-    // creates a dialog to set the chosen attribute
-    void set_attr_dialog(string attr);
+    void draw_content(Spsc_queue<vector<string>>& content_q);
+   // set_attr_dialog(std::string attr);
     // displays a simple choiche dialog
-    char choice_dialog(string msg);
+    //char choice_dialog(string msg);
 public:
     // runs the interface
-    void run(Spsc_queue<int>& key_q, Spsc_queue<float>& vol_q, Spsc_queue<vector<string>>& content_q, Spsc_queue<std::tuple<string, string>>>& menu_q);
+    void run(
+        Spsc_queue<int>& key_q, 
+        Spsc_queue<vector<string>>& content_q, 
+        Spsc_queue<vector<std::tuple<string, string>>>& menu_q);
 
-    Lrc_interface(Lrc_generator& model);
+    Lrc_interface(Lrc_generator* model);
     ~Lrc_interface();
 
 };
