@@ -52,7 +52,7 @@ private:
   // utility function to draw the menu
   void draw_menu(void);
   // creates a dialog to set the chosen attribute
-  void set_attr_dialog(string attr);
+  void set_attr_dialog(string msg, string attr);
   // displays a simple choiche dialog
   char choice_dialog(string msg);
 

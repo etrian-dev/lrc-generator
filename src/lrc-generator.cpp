@@ -138,7 +138,7 @@ void Lrc_generator::sync(void) {
         }
 
         // Synchronize the current line
-        // formatted as [mm:ss.centsecond]<line>
+        // formatted as [mm:ss.centsecond] (the line is added when the output is written)
         string str_timestamp =
             "[" + std::to_string((tot_playback.count() / 60000) % 60000) + ":" +
             std::to_string((tot_playback.count() / 1000) % 60) + "." +
@@ -331,16 +331,16 @@ void Lrc_generator::run(void) {
             preview_lrc();
             break;
         case 2:
-            set_attr_dialog("Song title");
+            set_attr_dialog("Song title", "ti");
             break;
         case 3:
-            set_attr_dialog("Song artist");
+            set_attr_dialog("Song artist", "ar");
             break;
         case 4:
-            set_attr_dialog("Song album");
+            set_attr_dialog("Song album", "al");
             break;
         case 5:
-            set_attr_dialog("Lrc creator");
+            set_attr_dialog("Lrc creator", "by");
             break;
         default:
             // quit the program

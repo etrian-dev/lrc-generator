@@ -34,7 +34,7 @@ void Lrc_generator::draw_menu(void) {
     wrefresh(this->menu);
 }
 
-void Lrc_generator::set_attr_dialog(std::string attr) {
+void Lrc_generator::set_attr_dialog(std::string msg, std::string attr) {
     WINDOW *dialog = newwin(4, 50, 20, 50);
     bool not_ok = true;
     char value[20] = {0};
@@ -46,7 +46,7 @@ void Lrc_generator::set_attr_dialog(std::string attr) {
     do {
         wclear(dialog);
         box(dialog, 0, 0);
-        mvwprintw(dialog, hoff, woff, "%s: ", attr.c_str());
+        mvwprintw(dialog, hoff, woff, "%s: ", msg.c_str());
         i = 0;
         do {
             c = wgetch(dialog);
@@ -66,23 +66,19 @@ void Lrc_generator::set_attr_dialog(std::string attr) {
         wrefresh(dialog);
     } while (not_ok);
 
-    // now write it to the file
-    if (attr.compare("cr") == 0) {
-        attr.assign("by"); // the creator attribute has another abbreviation
-    }
     // push this metadata (updates if it was already set)
     /// TODO: improve this
     size_t j = 0;
     for (; j < this->metadata.size(); j++) {
-        if (this->metadata[j].find("[" + attr.substr(0, 2) + ": ") !=
+        if (this->metadata[j].find("[" + attr + ": ") !=
                 std::string::npos) {
             this->metadata[j].erase();
-            this->metadata[j] = "[" + attr.substr(0, 2) + ": " + value + "]";
+            this->metadata[j] = "[" + attr + ": " + value + "]";
             break;
         }
     }
     if (j == this->metadata.size()) {
-        this->metadata.push_back("[" + attr.substr(0, 2) + ": " + value + "]");
+        this->metadata.push_back("[" + attr + ": " + value + "]");
     }
     // deletes this window
     delwin(dialog);
