@@ -18,6 +18,7 @@
 #include <string>
 #include <thread>
 #include <utility> // to use std::move, used to move-construct a stream
+#include <cassert>
 
 namespace ns = std::filesystem;
 using std::string;
@@ -56,6 +57,7 @@ Lrc_generator::Lrc_generator(fs::path &in_file, fs::path &out_file,
     this->metadata = vector<string>();
 
     this->songfile = song_path;
+    assert(this->song.openFromFile(song_path.string()));
 
     if (input_stream.eof()) {
         input_stream.close();
@@ -68,6 +70,13 @@ Lrc_generator::~Lrc_generator() {
     for (auto ln : this->metadata) {
         this->output_stream << ln << '\n';
     }
+    // add lenght metadata
+    float dur = this->song.getDuration().asSeconds();
+    int mins = dur / 60;
+    int secs = dur - 60 * mins;
+    this->output_stream << "[length:" << mins << '.' << secs << "]\n";
+
+    // write synchronized lines
     for (i = 0; i < this->lrc_text.size(); i++) {
         // first append the time point
         this->output_stream << this->lrc_text[i] << this->lyrics[i] << '\n';
@@ -91,11 +100,6 @@ void Lrc_generator::sync(void) {
     // it's a stream, so it must not be destroyed as long as it's being played
     // supported formats are those listed at
     // https://www.sfml-dev.org/tutorials/2.5/audio-sounds.php
-    sf::Music song;
-    if (!song.openFromFile(this->songfile.string())) {
-        std::cerr << "Failed to open the song file at \"" << this->songfile
-                  << "\"\n";
-    }
 
     // offsets from the window border
     const int hoff = 2;
@@ -121,8 +125,8 @@ void Lrc_generator::sync(void) {
 
     // THE SONG (IF LOADED) STARTS PLAYING
     // does not loop when the end is reached by default
-    song.play();
-    float vol = song.getVolume();
+    this->song.play();
+    float vol = this->song.getVolume();
     // stores the initial timepoint
     line_start_tp = clock.now();
 
@@ -165,7 +169,7 @@ void Lrc_generator::sync(void) {
         size_t vol_level = (int)std::max(0.0, vol / 2.0);
         vol_slider.replace(1, slider_sz, slider_sz, '-');
         vol_slider.replace(1, vol_level, vol_level, '#');
-        mvwaddstr(this->lyrics_win, hoff + 6, woff, vol_slider.c_str());
+        mvwprintw(this->lyrics_win, hoff + 6, woff, "KEY_DOWN %s KEY_UP", vol_slider.c_str());
 
         // bottom command cheatsheet
         mvwaddstr(this->lyrics_win, height - 4, woff, "space: pause");
@@ -180,15 +184,15 @@ void Lrc_generator::sync(void) {
 
         if (c == KEY_UP) {
             vol = std::min(100.0f, vol + volume_step);
-            song.setVolume(vol);
-            vol = song.getVolume();
+            this->song.setVolume(vol);
+            vol = this->song.getVolume();
             current = prev;
             continue;
         }
         if (c == KEY_DOWN) {
             vol = std::max(0.0f, vol - volume_step);
-            song.setVolume(vol);
-            vol = song.getVolume();
+            this->song.setVolume(vol);
+            vol = this->song.getVolume();
             current = prev;
             continue;
         }
@@ -200,7 +204,7 @@ void Lrc_generator::sync(void) {
             tot_playback +=
                 std::chrono::duration_cast<MilliSecs>(clock.now() - line_start_tp);
             // pause the audio track and
-            song.pause();
+            this->song.pause();
             wclear(this->lyrics_win);
             box(this->lyrics_win, 0, 0);
             wstandout(this->lyrics_win);
@@ -225,15 +229,15 @@ void Lrc_generator::sync(void) {
         if (c == 's') {
             // Restart sychronization
 
-            // stop the song, clear the output and reset the index and line
-            song.stop();
+            // stop the this->song, clear the output and reset the index and line
+            this->song.stop();
             this->lrc_text.clear();
             this->delays.clear();
             // reset the starting clock and the song duration offset
             tot_playback = MilliSecs::zero();
             idx = 0;
             prev.erase();
-            song.play(); // restart playing the song
+            this->song.play(); // restart playing the song
             line_start_tp = clock.now();
             continue; // to avoid recording a timestamp immediately
         }
@@ -251,7 +255,7 @@ void Lrc_generator::sync(void) {
     }
 
     // sync done, the song stops
-    song.stop();
+    this->song.stop();
     wclear(this->lyrics_win);
     mvwprintw(this->lyrics_win, 0, 0, "Synchronization DONE\n");
 }
@@ -276,11 +280,7 @@ void Lrc_generator::preview_lrc(void) {
         return;
     }
 
-    sf::Music song;
-    if (!song.openFromFile(this->songfile.string())) {
-        return;
-    }
-    song.play();
+    this->song.play();
 
     wattron(this->lyrics_win, A_BOLD);
     string curr;
@@ -306,7 +306,7 @@ void Lrc_generator::preview_lrc(void) {
     mvwaddstr(this->lyrics_win, hoff + 2, woff, "END (press any key to quit)");
     wrefresh(this->lyrics_win);
 
-    song.stop();
+    this->song.stop();
 
     int x = wgetch(this->lyrics_win);
 }

@@ -3,6 +3,7 @@
 
 // my headers
 #include "line.h"
+#include <SFML/Audio.hpp>
 // std lib headers
 #include <filesystem>
 #include <fstream>
@@ -36,6 +37,7 @@ private:
 
   // music stream filename
   fs::path songfile;
+  sf::Music song;
 
   // interactively sync the lyrics to the song
   void sync(void);
