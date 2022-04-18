@@ -93,6 +93,11 @@ Lrc_generator::~Lrc_generator() {
 void Lrc_generator::sync(void) {
     LOG_SCOPE_FUNCTION(INFO);
 
+    // Render the synchronization menu
+    vector<string> menuitems = {"MENU", "[space] pause", "[s] restart", "[other keys] set timestamp"};
+    vector<attr_t> attributes = {A_STANDOUT, A_NORMAL, A_NORMAL, A_NORMAL};
+    render_win(this->menu, menuitems, attributes);
+
     Clock clock;
     std::chrono::time_point<Clock> line_start_tp, current_tp;
     // this duration object stores the time spent in song playback (accounting for
@@ -102,6 +107,9 @@ void Lrc_generator::sync(void) {
 
     // dummy variable
     int c;
+
+    int height, width;
+    getmaxyx(this->lyrics_win, height, width);
 
     // enable the keypad for KEY_UP/DOWN (volume slider)
     keypad(this->lyrics_win, true);
@@ -161,12 +169,6 @@ void Lrc_generator::sync(void) {
 
         render_win(this->lyrics_win, content, styles);
 
-        // bottom command cheatsheet
-        //mvwaddstr(this->lyrics_win, height - 4, woff, "space: pause");
-        //mvwaddstr(this->lyrics_win, height - 3, woff,"'s: restart synchronization");
-        //mvwaddstr(this->lyrics_win, height - 2, woff,"any other key: advance to the next line");
-        
-
         // blocks until a character is pressed
         c = wgetch(this->lyrics_win);
 
@@ -197,7 +199,7 @@ void Lrc_generator::sync(void) {
             // stores the time passed from the last timestamp up to now
             tot_playback +=
                 std::chrono::duration_cast<MilliSecs>(clock.now() - line_start_tp);
-            // pause the audio track and
+            // pause the audio track and wait for another key press to resume
             this->song.pause();
             wclear(this->lyrics_win);
             box(this->lyrics_win, 0, 0);
@@ -267,10 +269,6 @@ void Lrc_generator::sync(void) {
 // previews the synchronized lyrics
 void Lrc_generator::preview_lrc(void) {
     LOG_SCOPE_FUNCTION(INFO);
-
-    // offsets from the window border
-    const int hoff = 2;
-    const int woff = 2;
 
     if (this->lrc_text.empty()) {
         char choice =

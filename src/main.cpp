@@ -80,6 +80,7 @@ std::vector<string> parse_args(int argc, char **argv) {
 
 int main(int argc, char **argv) {
     loguru::init(argc, argv);
+    loguru::g_stderr_verbosity = loguru::Verbosity_ERROR;
     string logfile(argv[0]);
     logfile += ".log";
     loguru::add_file(logfile.c_str(), loguru::Truncate, loguru::Verbosity_INFO);
