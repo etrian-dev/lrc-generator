@@ -2,6 +2,8 @@
 #include "../headers/lrc-generator.h"
 // header file for arg parsing
 #include "../headers/cxxopts.hpp"
+// logging library
+#include "../headers/loguru.hpp"
 // curses library
 #include <ncurses.h>
 // other standard lib headers
@@ -28,7 +30,7 @@ void cleanup_ncurses(void) {
     endwin();
 }
 
-std::vector<string> parse_args(int argc, const char **argv) {
+std::vector<string> parse_args(int argc, char **argv) {
     std::vector<string> files = std::vector<string>();
 
     cxxopts::Options all_opts("Lrc generator",
@@ -76,7 +78,12 @@ std::vector<string> parse_args(int argc, const char **argv) {
     return files;
 }
 
-int main(int argc, const char **argv) {
+int main(int argc, char **argv) {
+    loguru::init(argc, argv);
+    string logfile(argv[0]);
+    logfile += ".log";
+    loguru::add_file(logfile.c_str(), loguru::Truncate, loguru::Verbosity_INFO);
+
     std::vector<string> files = parse_args(argc, argv);
     if (files.size() == 0) {
         return 1;
@@ -97,9 +104,8 @@ int main(int argc, const char **argv) {
             lrc_path += ".lrc";
         }
     } else {
-        std::cout << "One of the following files does not exist\n"
-                  << "Lyrics file: " << fs::absolute(lyrics_path)
-                  << "\nAudio file: " << fs::absolute(audio_path) << "\n";
+        LOG_IF_F(ERROR, not fs::exists(audio_path), "File not found: %s", lyrics_path.c_str());
+        LOG_IF_F(ERROR, not fs::exists(audio_path), "File not found: %s", audio_path.c_str());
         return 1;
     }
 
@@ -109,15 +115,10 @@ int main(int argc, const char **argv) {
     lrc_fname = lrc_path.filename();
 
     // Lrc_generator is a simple class to generate the lrc file (includes a tui)
-    std::cout << "Parameters summary:\n"
-              << "Lyrics file: " << fs::absolute(lyrics_path)
-              << "\nAudio file: " << fs::absolute(audio_path)
-              << "\nOutput file (.lrc): " << fs::absolute(lrc_path) << std::endl;
-
-    std::cout << "Parameters summary:\n"
-              << "Lyrics file: " << lyrics_fname
-              << "\nAudio file: " << audio_fname
-              << "\nOutput file (.lrc): " << lrc_fname << std::endl;
+    LOG_F(INFO, "Arguments summary:");
+    LOG_F(INFO, "Lyrics file: %s", lyrics_path.c_str());
+    LOG_F(INFO, "Audio file: %s", audio_path.c_str());
+    LOG_F(INFO, "Output file: %s", lrc_path.c_str());
 
     // Instantiates the generator and tries to create output & input streams
     // This is better done before the initialization of curses, so that the

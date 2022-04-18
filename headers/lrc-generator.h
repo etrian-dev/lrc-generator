@@ -51,6 +51,7 @@ private:
   int height;
   int width;
   void interface_setup(void);
+  void render_win(WINDOW *win,  vector<string>& content, vector<attr_t>& style);
   // utility function to draw the menu
   void draw_menu(void);
   // creates a dialog to set the chosen attribute

@@ -1,6 +1,8 @@
 // my headers
 #include "../headers/lrc-generator.h"
 #include "../headers/line.h"
+// logging library
+#include "../headers/loguru.hpp"
 // SFML headers for music playback
 #include <SFML/Audio.hpp>
 // curses library
@@ -35,13 +37,11 @@ Lrc_generator::Lrc_generator(fs::path &in_file, fs::path &out_file,
     std::ifstream input_stream = std::ifstream(in_file, std::ios_base::in);
     this->output_stream = std::ofstream(out_file, std::ios_base::out);
     if (!input_stream.is_open()) {
-        std::cerr << "Error opening the input stream on file \"" << in_file
-                  << "\".\n";
+        LOG_F(FATAL, "Error opening the input stream on file: %s", in_file.c_str());
         exit(1);
     }
     if (!this->output_stream.is_open()) {
-        std::cerr << "Error opening the input stream on file \"" << out_file
-                  << "\".\n";
+        LOG_F(FATAL, "Error opening the input stream on file: %s", out_file.c_str());
         exit(1);
     }
 
@@ -58,6 +58,7 @@ Lrc_generator::Lrc_generator(fs::path &in_file, fs::path &out_file,
 
     this->songfile = song_path;
     assert(this->song.openFromFile(song_path.string()));
+    LOG_F(INFO, "Opened song stream successfully");
 
     if (input_stream.eof()) {
         input_stream.close();
@@ -86,6 +87,9 @@ Lrc_generator::~Lrc_generator() {
 
 // function to sync the lyrics to the song
 void Lrc_generator::sync(void) {
+
+    LOG_SCOPE_FUNCTION(INFO);
+
     Clock clock;
     std::chrono::time_point<Clock> line_start_tp, current_tp;
     // this duration object stores the time spent in song playback (accounting for
@@ -111,7 +115,7 @@ void Lrc_generator::sync(void) {
 
     const size_t slider_sz = 50;
     const float volume_step = 2.0f;
-    string vol_slider = string(slider_sz, '-');
+    string vol_slider = string(slider_sz, ' ');
     vol_slider.insert(0, 1, '[');
     vol_slider.push_back(']');
 
@@ -150,34 +154,25 @@ void Lrc_generator::sync(void) {
         this->lrc_text.push_back(str_timestamp);
         this->delays.push_back(tot_playback.count());
 
-        wclear(this->lyrics_win);
-        box(this->lyrics_win, 0, 0);
-        // display the current line being synchronized and the next one on stdout
-        // or print "(null)" if the line is empty
-        mvwaddstr(this->lyrics_win, hoff, woff,
-                  (prev.empty() ? "(null)" : prev.c_str()));
-        wattron(this->lyrics_win, A_BOLD);
-        mvwaddstr(this->lyrics_win, hoff + 1, woff,
-                  (current.empty() ? "(null)" : current.c_str()));
-        wattroff(this->lyrics_win, A_BOLD);
-        mvwaddstr(this->lyrics_win, hoff + 2, woff,
-                  (next.empty() ? "(null)" : next.c_str()));
-        mvwprintw(this->lyrics_win, hoff + 4, woff, "Last timestamp [%d.%d s]",
-                  tot_playback.count() / 1000, (tot_playback.count() / 10) % 100);
+        LOG_F(INFO, "%s%s", str_timestamp.c_str(), current.c_str());
 
-        mvwprintw(this->lyrics_win, hoff + 5, woff, "volume: %.0f%%", vol);
-        size_t vol_level = (int)std::max(0.0, vol / 2.0);
-        vol_slider.replace(1, slider_sz, slider_sz, '-');
-        vol_slider.replace(1, vol_level, vol_level, '#');
-        mvwprintw(this->lyrics_win, hoff + 6, woff, "KEY_DOWN %s KEY_UP", vol_slider.c_str());
+        vector<string> content = {prev, current, next};
+        content[1].insert(0, ">> ");
+        content.push_back("Last timestamp: " 
+            + std::to_string(tot_playback.count() / 1000) 
+            + "." + std::to_string((tot_playback.count() / 10) % 100));
+        content.push_back("volume: " + std::to_string(vol));
+        // set attributes vector
+        vector<attr_t> styles(content.size(), A_NORMAL);
+        styles[1] = A_STANDOUT;
+
+        render_win(this->lyrics_win, content, styles);
 
         // bottom command cheatsheet
-        mvwaddstr(this->lyrics_win, height - 4, woff, "space: pause");
-        mvwaddstr(this->lyrics_win, height - 3, woff,
-                  "'s: restart synchronization");
-        mvwaddstr(this->lyrics_win, height - 2, woff,
-                  "any other key: advance to the next line");
-        wrefresh(this->lyrics_win);
+        //mvwaddstr(this->lyrics_win, height - 4, woff, "space: pause");
+        //mvwaddstr(this->lyrics_win, height - 3, woff,"'s: restart synchronization");
+        //mvwaddstr(this->lyrics_win, height - 2, woff,"any other key: advance to the next line");
+        
 
         // blocks until a character is pressed
         c = wgetch(this->lyrics_win);
@@ -187,6 +182,9 @@ void Lrc_generator::sync(void) {
             this->song.setVolume(vol);
             vol = this->song.getVolume();
             current = prev;
+
+            LOG_F(INFO, "Volume +%f: current volume is %f", volume_step, vol);
+
             continue;
         }
         if (c == KEY_DOWN) {
@@ -194,6 +192,9 @@ void Lrc_generator::sync(void) {
             this->song.setVolume(vol);
             vol = this->song.getVolume();
             current = prev;
+
+            LOG_F(INFO, "Volume -%f: current volume is %f", volume_step, vol);
+
             continue;
         }
 
@@ -216,6 +217,9 @@ void Lrc_generator::sync(void) {
             mvwaddstr(this->lyrics_win, height / 2 + 1,
                       width / 2 - resume.length() / 2, resume.data());
             wrefresh(this->lyrics_win);
+
+            LOG_F(INFO, "Synchronization paused");
+
             // waits for a key press to resume
             c = wgetch(this->lyrics_win);
             // the time point at the end of a pause is the new starting point for the
@@ -223,6 +227,9 @@ void Lrc_generator::sync(void) {
             line_start_tp = clock.now();
             // A little trick: ensure that at the next iteration a line is not skipped
             current = prev;
+
+            LOG_F(INFO, "Synchronization restarted");
+
             continue; // to avoid recording a timestamp immediately
         }
 
@@ -239,6 +246,9 @@ void Lrc_generator::sync(void) {
             prev.erase();
             this->song.play(); // restart playing the song
             line_start_tp = clock.now();
+
+            LOG_F(INFO, "Synchronization restarted");
+
             continue; // to avoid recording a timestamp immediately
         }
 
@@ -257,7 +267,8 @@ void Lrc_generator::sync(void) {
     // sync done, the song stops
     this->song.stop();
     wclear(this->lyrics_win);
-    mvwprintw(this->lyrics_win, 0, 0, "Synchronization DONE\n");
+    
+    LOG_F(INFO, "Synchronization Done");
 }
 
 // previews the synchronized lyrics
@@ -265,8 +276,6 @@ void Lrc_generator::preview_lrc(void) {
     // offsets from the window border
     const int hoff = 2;
     const int woff = 2;
-    int height, width;
-    getmaxyx(this->lyrics_win, height, width);
 
     if (this->lrc_text.empty()) {
         char choice =
@@ -308,7 +317,8 @@ void Lrc_generator::preview_lrc(void) {
 
     this->song.stop();
 
-    int x = wgetch(this->lyrics_win);
+    // just to prevent the window from closing
+    wgetch(this->lyrics_win);
 }
 
 // the menu loop presented by the class to the user

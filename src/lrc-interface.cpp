@@ -1,5 +1,8 @@
 // header file for the generator class
 #include "../headers/lrc-generator.h"
+#include <cassert>
+#include <utility>
+#include <algorithm> // to add support for zip()-like tuples in for loop
 // curses library
 #include <ncurses.h>
 
@@ -32,6 +35,31 @@ void Lrc_generator::draw_menu(void) {
     mvwaddstr(this->menu, i + hoff, woff, "other keys: Quit\n");
     box(this->menu, 0, 0);
     wrefresh(this->menu);
+}
+
+void Lrc_generator::render_win(WINDOW *win, vector<string>& content, vector<attr_t>& style) {
+    wclear(win);
+    box(win, 0, 0);
+    int height_offt = 2;
+    int width_offt = 2;
+    int i = 0;
+    auto s = content.begin();
+    auto attr = style.begin();
+    for (; s != content.end() && attr != style.end(); ++s, ++attr) {
+        if(!(*s).empty()) {
+            if (*attr != A_NORMAL) {
+                wattr_on(win, *attr, 0);
+                mvwaddstr(win, height_offt + i, width_offt, (*s).c_str());
+                wattr_off(win, *attr, 0);
+            }
+            else {
+                mvwaddstr(win, height_offt + i, width_offt, (*s).c_str());
+            }
+
+        }
+        i++;
+    }
+    wrefresh(win);
 }
 
 void Lrc_generator::set_attr_dialog(std::string msg, std::string attr) {
