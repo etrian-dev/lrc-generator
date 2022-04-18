@@ -2,7 +2,7 @@
 This simple program generates a .lrc file used for syncing the lyrics of a song
 to its audio track. Music players supporting this format can then display the
 lyrics along with the song. Additional information can be supplied as well, such as
-title, artist, album name and the creator of the subtitles file.
+title, artist, album name, song lenght and the creator of the lrc file.
 
 More information about this file format can be found on Wikipedia
 
@@ -11,13 +11,15 @@ More information about this file format can be found on Wikipedia
 * A C++ compiler supporting at least c++17 (because of std::filesystem)
 * SFML library (tested with 2.5.1)
 * ncurses library (tested with 6.2)
+* meson
+* ninja
 
 ```
 git clone https://github.com/etrian-dev/lrc-generator.git
 cd lrc-generator
-make
+meson setup build
+ninja -C build
 ```
-To build the debug executable just ``` make debug ```
 
 ## Usage
 `lrc-generator -a [audio file] -l [lyrics file] -o [lrc-file]`  
@@ -37,13 +39,12 @@ the maximum volume currently set.
 Note that the output file is written only when the program exits correctly, so as to allow to reorder output lines and restart the synchronization, if needed.
 
 ### Synchronization
-During synchronization the line timestamp (when such line will appear on the music player)
-should be set by pressing some key as soon as that line starts, so to set **curr**'s timestamp
-one should wait the termination of the line before (not on screen at the moment) and then
-press some key. This behaviour will be changed, as it's a bit unintuitive
+During synchronization the first line's offset is always 0 (it appears as soon as the track starts in the music player).
+When synchronizing the current line being sung should always be the one hightlighted; when a key is pressed the timestamp
+for the next line is taken and the window refreshes. A menu of available keybindings is available on the left side, during synchronization.
 ### LICENSE
-The license is MIT, as provided in the LICENSE file.
+The license for this software is MIT, as provided in the LICENSE file.
 The [cxxopts](https://github.com/jarro2783/cxxopts) library that has been used for command line option parsing
 is licensed under the same license.
-
+The [loguru](https://github.com/emilk/loguru) library used for logging is in the public domain, as stated in the linked repository
 
