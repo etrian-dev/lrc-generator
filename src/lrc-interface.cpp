@@ -40,8 +40,8 @@ void Lrc_generator::draw_menu(void) {
 void Lrc_generator::render_win(WINDOW *win, vector<string>& content, vector<attr_t>& style) {
     wclear(win);
     box(win, 0, 0);
-    int height_offt = 2;
-    int width_offt = 2;
+    int height_offt = 1;
+    int width_offt = 1;
     int i = 0;
     auto s = content.begin();
     auto attr = style.begin();
@@ -116,10 +116,6 @@ char Lrc_generator::choice_dialog(std::string msg) {
     int height, width;
     getmaxyx(this->menu, height, width);
     WINDOW *dialog = newwin(4, 75, height / 2, width / 2);
-    char value[20] = {0};
-    char ans;
-    char c;
-    int i = 0;
     const int hoff = 1;
     const int woff = 1;
 
@@ -127,7 +123,7 @@ char Lrc_generator::choice_dialog(std::string msg) {
     box(dialog, 0, 0);
     mvwaddstr(dialog, hoff, woff, msg.c_str());
     mvwaddstr(dialog, hoff + 1, woff, "[Y/n]");
-    c = wgetch(dialog);
+    char c = wgetch(dialog);
 
     // deletes this window
     delwin(dialog);

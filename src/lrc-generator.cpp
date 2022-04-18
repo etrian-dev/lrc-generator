@@ -57,6 +57,10 @@ Lrc_generator::Lrc_generator(fs::path &in_file, fs::path &out_file,
     this->metadata = vector<string>();
 
     this->songfile = song_path;
+    // load the song in a sf::Music object
+    // it's a stream, so it must not be destroyed as long as it's being played
+    // supported formats are those listed at
+    // https://www.sfml-dev.org/tutorials/2.5/audio-sounds.php
     assert(this->song.openFromFile(song_path.string()));
     LOG_F(INFO, "Opened song stream successfully");
 
@@ -87,7 +91,6 @@ Lrc_generator::~Lrc_generator() {
 
 // function to sync the lyrics to the song
 void Lrc_generator::sync(void) {
-
     LOG_SCOPE_FUNCTION(INFO);
 
     Clock clock;
@@ -100,17 +103,7 @@ void Lrc_generator::sync(void) {
     // dummy variable
     int c;
 
-    // load the song in a sf::Music object
-    // it's a stream, so it must not be destroyed as long as it's being played
-    // supported formats are those listed at
-    // https://www.sfml-dev.org/tutorials/2.5/audio-sounds.php
-
-    // offsets from the window border
-    const int hoff = 2;
-    const int woff = 2;
-    int height, width;
-    getmaxyx(this->lyrics_win, height, width);
-    // enable the keypad for KEY_UP/DOWN
+    // enable the keypad for KEY_UP/DOWN (volume slider)
     keypad(this->lyrics_win, true);
 
     const size_t slider_sz = 50;
@@ -156,15 +149,15 @@ void Lrc_generator::sync(void) {
 
         LOG_F(INFO, "%s%s", str_timestamp.c_str(), current.c_str());
 
-        vector<string> content = {prev, current, next};
-        content[1].insert(0, ">> ");
+        vector<string> content = {"SYNCHRONIZATION", prev, current, next};
         content.push_back("Last timestamp: " 
             + std::to_string(tot_playback.count() / 1000) 
             + "." + std::to_string((tot_playback.count() / 10) % 100));
         content.push_back("volume: " + std::to_string(vol));
         // set attributes vector
         vector<attr_t> styles(content.size(), A_NORMAL);
-        styles[1] = A_STANDOUT;
+        styles[0] = A_STANDOUT;
+        styles[2] = A_STANDOUT;
 
         render_win(this->lyrics_win, content, styles);
 
@@ -273,6 +266,8 @@ void Lrc_generator::sync(void) {
 
 // previews the synchronized lyrics
 void Lrc_generator::preview_lrc(void) {
+    LOG_SCOPE_FUNCTION(INFO);
+
     // offsets from the window border
     const int hoff = 2;
     const int woff = 2;
@@ -286,39 +281,37 @@ void Lrc_generator::preview_lrc(void) {
         if (choice == 'y') {
             sync();
         }
-        return;
     }
+
+    LOG_F(INFO, "Preview of %s started", this->songfile.c_str());
 
     this->song.play();
 
+    vector<string> content(1, "PREVIEW");
+    vector<attr_t> styles = {A_STANDOUT, A_BOLD};
+
     wattron(this->lyrics_win, A_BOLD);
     string curr;
-    for (size_t i = 0; i < this->delays.size() - 1; i++) {
-        curr = this->lyrics[i];
+    size_t i;
+    for (i = 0; i < this->delays.size() - 1; i++) {
+        content.push_back(this->lrc_text[i] + this->lyrics[i]);
 
-        wclear(this->lyrics_win);
-        box(this->lyrics_win, 0, 0);
-        // print lines
-        mvwprintw(this->lyrics_win, hoff, woff, "PREVIEW \"%s\"",
-                  this->songfile.filename().c_str());
-        mvwprintw(this->lyrics_win, hoff + 1, woff, "%d: %s", i + 1, curr.c_str());
-        wrefresh(this->lyrics_win);
+        render_win(this->lyrics_win, content, styles);
+
         MilliSecs dur = MilliSecs(this->delays[i + 1] - this->delays[i]);
         std::this_thread::sleep_for(dur);
+        content.pop_back();
     }
-    wclear(this->lyrics_win);
-    box(this->lyrics_win, 0, 0);
-    // print lines
-    mvwprintw(this->lyrics_win, hoff + 1, woff, "%d: %s", this->lyrics.size(),
-              this->lyrics[this->lyrics.size() - 1].c_str());
-    wattroff(this->lyrics_win, A_BOLD);
-    mvwaddstr(this->lyrics_win, hoff + 2, woff, "END (press any key to quit)");
-    wrefresh(this->lyrics_win);
+    content.push_back(this->lrc_text[i] + this->lyrics[i]);
+    content.push_back("END (press any key to quit)");
+    styles.push_back(A_BOLD);
+    render_win(this->lyrics_win, content, styles);
 
     this->song.stop();
 
     // just to prevent the window from closing
     wgetch(this->lyrics_win);
+    wclear(this->lyrics_win);
 }
 
 // the menu loop presented by the class to the user
