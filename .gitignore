@@ -1,4 +1,6 @@
-tests/
-stable/
-debug/
+build/
+audio/
+text/
+lrc/
+
 .vscode
