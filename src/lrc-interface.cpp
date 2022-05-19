@@ -5,6 +5,7 @@
 #include <tuple>
 // C-style asserts
 #include <cassert>
+#include <iostream>
 // curses library
 #include <ncurses.h>
 
@@ -18,8 +19,8 @@ Lrc_interface::Lrc_interface(Lrc_generator* generator) {
     this->lyrics_win = newwin(this->max_height, this->max_width / 2, 0, this->max_width / 2);
 
     // the OK constant is defined in ncurses.h
-    assert(this->menu == OK);
-    assert(this->lyrics_win == OK);
+    assert(this->menu);
+    assert(this->lyrics_win);
 
     // enable the keypad for KEY_UP/DOWN
     keypad(this->lyrics_win, true);
@@ -36,8 +37,8 @@ Lrc_interface::~Lrc_interface(void) {
 }
 
 void Lrc_interface::run(
-    Spsc_queue<int>& key_q, 
-    Spsc_queue<vector<string>>& content_q, 
+    Spsc_queue<int>& key_q,
+    Spsc_queue<vector<string>>& content_q,
     Spsc_queue<vector<std::tuple<string, string>>>& menu_q) {
 
     int action;
@@ -48,8 +49,10 @@ void Lrc_interface::run(
         }
 
         action = wgetch(this->menu);
+        std::cout << "(interface) action = " << action << "\n";
         key_q.produce(action);
     }
+    std::cout << "Interface thread quits\n";
 }
 
 void Lrc_interface::draw_menu(Spsc_queue<vector<std::tuple<string, string>>>& menu_q) {
@@ -97,7 +100,7 @@ void Lrc_interface::draw_content(
     //mvwprintw(this->lyrics_win, hoff + 4, woff, "Last timestamp [%d.%d s]",
     //          tot_playback.count() / 1000, (tot_playback.count() / 10) % 100);
 
-    
+
     wrefresh(this->lyrics_win);
 
     // TODO: wgetch(tyrics_win) and key_q.produce()?

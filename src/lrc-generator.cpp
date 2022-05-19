@@ -65,7 +65,7 @@ Lrc_generator::Lrc_generator(fs::path &in_file, fs::path &out_file,
     if (input_stream.eof()) {
         input_stream.close();
     }
-    
+
     // initialize the generator's state to "MENU"
     this->state = GeneratorState::MENU;
 }
@@ -371,7 +371,7 @@ vector<std::tuple<string, string>> main_menu {
     std::make_tuple("1"s, "preview"s),
     std::make_tuple("2"s, "set metadata"s),
     std::make_tuple("other keys"s, "quit"s)
-    
+
 };
 
 vector<std::tuple<string, string>> sync_menu {
@@ -398,8 +398,8 @@ vector<std::tuple<string, string>> metadata_menu {
 
 // the menu loop presented by the class to the user
 void Lrc_generator::run(
-    Spsc_queue<int>& key_q, 
-    Spsc_queue<vector<string>>& content_q, 
+    Spsc_queue<int>& key_q,
+    Spsc_queue<vector<string>>& content_q,
     Spsc_queue<vector<std::tuple<string, string>>>& menu_q) {
 
     this->state = GeneratorState::MENU;
@@ -411,6 +411,8 @@ void Lrc_generator::run(
 
             // Gets an action from the interface
             action = key_q.consume();
+
+            std::cout << "action = " << action << "\n";
 
             switch (action - '0') {
             case 0:
@@ -440,4 +442,5 @@ void Lrc_generator::run(
             }
         }
     }
+    std::cout << "Generator thread quits\n";
 }

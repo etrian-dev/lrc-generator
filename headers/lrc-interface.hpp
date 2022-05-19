@@ -33,8 +33,8 @@ private:
 public:
     // runs the interface
     void run(
-        Spsc_queue<int>& key_q, 
-        Spsc_queue<vector<string>>& content_q, 
+        Spsc_queue<int>& key_q,
+        Spsc_queue<vector<string>>& content_q,
         Spsc_queue<vector<std::tuple<string, string>>>& menu_q);
 
     Lrc_interface(Lrc_generator* model);

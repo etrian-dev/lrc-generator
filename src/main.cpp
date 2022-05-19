@@ -10,6 +10,7 @@
 #include <string>
 #include <tuple>
 #include <thread>
+#include <chrono>
 // curses library
 #include <ncurses.h>
 
@@ -17,6 +18,7 @@ namespace fs = std::filesystem;
 
 using std::string;
 using std::literals::string_literals::operator""s;
+using std::literals::chrono_literals::operator""s;
 
 // functions to initialize the ncurses library and do cleanup respectively
 void init_ncurses() {
@@ -81,7 +83,7 @@ std::vector<string> parse_args(int argc, const char **argv) {
 
 void wrapper_run_generator(
     Lrc_generator gen,
-    Spsc_queue<int>& key_q, 
+    Spsc_queue<int>& key_q,
     Spsc_queue<vector<string>>& content_q,
     Spsc_queue<vector<std::tuple<string, string>>>& menu_q) {
     gen.run(key_q, content_q, menu_q);
@@ -89,7 +91,7 @@ void wrapper_run_generator(
 
 void wrapper_run_interface(
     Lrc_interface interface,
-    Spsc_queue<int>& key_q, 
+    Spsc_queue<int>& key_q,
     Spsc_queue<vector<string>>& content_q,
     Spsc_queue<vector<std::tuple<string, string>>>& menu_q) {
     interface.run(key_q, content_q, menu_q);
@@ -138,14 +140,15 @@ int main(int argc, const char **argv) {
               << "\nAudio file: " << audio_fname
               << "\nOutput file (.lrc): " << lrc_fname << std::endl;
 
+    // initialize the curses library for immediate input and keypad enabled
+    init_ncurses();
+
     // Instantiates the generator and tries to create output & input streams
     // This is better done before the initialization of curses, so that the
     // terminal does not get garbled by ncurses
     Lrc_generator generator(lyrics_path, lrc_path, audio_path);
     Lrc_interface interface(&generator);
 
-    // initialize the curses library for immediate input and keypad enabled
-    init_ncurses();
 
     // creates queues for all the events
     Spsc_queue<int> key_queue = Spsc_queue<int>(10);
@@ -154,18 +157,21 @@ int main(int argc, const char **argv) {
 
     // FIXME: cannot use member func as thread function, maybe create a wrapper in main.cpp
     std::thread generator_th = std::thread(
-        &Lrc_generator::run, 
+        &Lrc_generator::run,
         &generator,
-        std::ref(key_queue), 
-        std::ref(content_queue), 
+        std::ref(key_queue),
+        std::ref(content_queue),
         std::ref(menu_queue));
     std::thread interface_th = std::thread(
         &Lrc_interface::run,
         &interface,
-        std::ref(key_queue), 
-        std::ref(content_queue), 
+        std::ref(key_queue),
+        std::ref(content_queue),
         std::ref(menu_queue));
 
+    while(generator.getState() != GeneratorState::QUITTING) {
+        std::this_thread::sleep_for(2s);
+    }
     generator_th.join();
     interface_th.join();
 
