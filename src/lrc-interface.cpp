@@ -1,5 +1,5 @@
 // header file for the generator class
-#include "../headers/lrc-generator.h"
+#include "lrc-generator.h"
 #include <cassert>
 #include <utility>
 #include <algorithm> // to add support for zip()-like tuples in for loop

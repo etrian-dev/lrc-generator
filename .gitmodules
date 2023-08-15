@@ -1,0 +1,6 @@
+[submodule "loguru"]
+	path = loguru
+	url = https://github.com/emilk/loguru.git
+[submodule "cxxopts"]
+	path = cxxopts
+	url = https://github.com/jarro2783/cxxopts.git

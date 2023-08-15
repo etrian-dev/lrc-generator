@@ -1,4 +1,4 @@
-#include "../headers/line.h"
+#include "line.h"
 
 #include <string>
 using std::string;
