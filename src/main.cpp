@@ -18,8 +18,7 @@ using std::string;
 using std::literals::string_literals::operator"" s;
 
 // functions to initialize the ncurses library and do cleanup respectively
-void
-init_ncurses() {
+void init_ncurses() {
   initscr();            // start curses
   cbreak();             // disable line buffering
   noecho();             // disable input echo
@@ -27,23 +26,18 @@ init_ncurses() {
 
   refresh();
 }
-void
-cleanup_ncurses(void) {
-  endwin();
-}
+void cleanup_ncurses(void) { endwin(); }
 
-std::vector<string>
-parse_args(int argc, char **argv) {
+std::vector<string> parse_args(int argc, char **argv) {
   std::vector<string> files = std::vector<string>();
 
   cxxopts::Options all_opts("Lrc generator",
                             "A simple TUI to generate .lrc files");
   all_opts.add_options()("h,help", "Help message")("v,version",
                                                    "Prints the version number")(
-    "o,output", "Output file to be written", cxxopts::value<string>())(
-    "a,audio-file", "Input audio file",
-    cxxopts::value<string>())("l,lyrics-file", "Input lyrics file",
-                              cxxopts::value<string>());
+      "o,output", "Output file to be written", cxxopts::value<string>())(
+      "a,audio-file", "Input audio file", cxxopts::value<string>())(
+      "l,lyrics-file", "Input lyrics file", cxxopts::value<string>());
 
   auto res = all_opts.parse(argc, argv);
   if (res.count("help") > 0) {
@@ -61,21 +55,18 @@ parse_args(int argc, char **argv) {
     if (res.count("audio-file") > 0 || res.count("lyrics-file") > 0) {
       audio_fname = res["audio-file"].as<string>();
       lyrics_fname = res["lyrics-file"].as<string>();
-    }
-    else {
+    } else {
       std::cout << "Required args missing\n";
       std::cout << all_opts.help() << "\n";
       return files;
     }
-  }
-  catch (std::exception &e) {
+  } catch (std::exception &e) {
     std::cout << "Exception: " << e.what() << "\n" << all_opts.help() << "\n";
     return files;
   }
   if (res.count("output") == 1) {
     lrc_fname = res["output"].as<string>();
-  }
-  else {
+  } else {
     // default to text file filename (later on the extension is changed to .lrc)
     lrc_fname = lyrics_fname;
   }
@@ -85,8 +76,7 @@ parse_args(int argc, char **argv) {
   return files;
 }
 
-int
-main(int argc, char **argv) {
+int main(int argc, char **argv) {
   loguru::init(argc, argv);
   loguru::g_stderr_verbosity = loguru::Verbosity_ERROR;
   string logfile(argv[0]);
@@ -109,12 +99,10 @@ main(int argc, char **argv) {
       if (lyrics_path.compare(lrc_path) == 0) {
         lrc_path = lrc_path.replace_extension(".lrc");
       }
-    }
-    else {
+    } else {
       lrc_path += ".lrc";
     }
-  }
-  else {
+  } else {
     LOG_IF_F(ERROR, not fs::exists(audio_path), "File not found: %s",
              lyrics_path.c_str());
     LOG_IF_F(ERROR, not fs::exists(audio_path), "File not found: %s",

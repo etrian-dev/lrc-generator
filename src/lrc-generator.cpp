@@ -20,7 +20,6 @@
 #include <string>
 #include <thread>
 #include <utility> // to use std::move, used to move-construct a stream
-#include <cassert>
 
 namespace ns = std::filesystem;
 using std::string;
