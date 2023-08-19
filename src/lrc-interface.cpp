@@ -6,7 +6,8 @@
 // curses library
 #include <ncurses.h>
 
-void Lrc_generator::interface_setup(void) {
+void
+Lrc_generator::interface_setup(void) {
   // splits the terminal: a left section with a menu and a right one with the
   // lyrics
   getmaxyx(stdscr, this->height, this->width);
@@ -14,7 +15,8 @@ void Lrc_generator::interface_setup(void) {
   this->lyrics_win = newwin(this->height, this->width / 2, 0, this->width / 2);
 }
 
-void Lrc_generator::draw_menu(void) {
+void
+Lrc_generator::draw_menu(bool song_loaded) {
   // menu options
   const int opts = 6;
   std::string menu_items[opts] = {"start syncing", "preview",   "set title",
@@ -31,13 +33,20 @@ void Lrc_generator::draw_menu(void) {
     mvwprintw(this->menu, i + hoff, woff, "%d: %s\n", i - 1,
               menu_items[i - 1].c_str());
   }
+  int ymax = getmaxy(this->menu);
   mvwaddstr(this->menu, i + hoff, woff, "other keys: Quit\n");
+  if (!song_loaded) {
+    wstandout(this->menu);
+    mvwaddstr(this->menu, ymax - 2, woff, "No song loaded");
+    wstandend(this->menu);
+  }
   box(this->menu, 0, 0);
   wrefresh(this->menu);
 }
 
-void Lrc_generator::render_win(WINDOW *win, vector<string> &content,
-                               vector<attr_t> &style) {
+void
+Lrc_generator::render_win(WINDOW *win, vector<string> &content,
+                          vector<attr_t> &style) {
   wclear(win);
   box(win, 0, 0);
   int height_offt = 1;
@@ -48,10 +57,11 @@ void Lrc_generator::render_win(WINDOW *win, vector<string> &content,
   for (; s != content.end() && attr != style.end(); ++s, ++attr) {
     if (!(*s).empty()) {
       if (*attr != A_NORMAL) {
-        wattr_on(win, *attr, 0);
+        wattr_on(win, *attr, NULL);
         mvwaddstr(win, height_offt + i, width_offt, (*s).c_str());
         wattr_off(win, *attr, 0);
-      } else {
+      }
+      else {
         mvwaddstr(win, height_offt + i, width_offt, (*s).c_str());
       }
     }
@@ -60,7 +70,8 @@ void Lrc_generator::render_win(WINDOW *win, vector<string> &content,
   wrefresh(win);
 }
 
-void Lrc_generator::set_attr_dialog(std::string msg, std::string attr) {
+void
+Lrc_generator::set_attr_dialog(std::string msg, std::string attr) {
   WINDOW *dialog = newwin(4, 50, 20, 50);
   bool not_ok = true;
   char value[20] = {0};
@@ -109,7 +120,8 @@ void Lrc_generator::set_attr_dialog(std::string msg, std::string attr) {
   delwin(dialog);
 }
 
-char Lrc_generator::choice_dialog(std::string msg) {
+char
+Lrc_generator::choice_dialog(std::string msg) {
   int height, width;
   getmaxyx(this->menu, height, width);
   WINDOW *dialog = newwin(4, 75, height / 2, width / 2);

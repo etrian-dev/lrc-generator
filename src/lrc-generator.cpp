@@ -15,6 +15,7 @@
 #include <fstream>
 #include <iomanip> // streams formatting functions
 #include <iostream>
+#include <memory>
 #include <limits> // to obtain a stream's max size
 #include <ratio>
 #include <string>
@@ -61,13 +62,6 @@ Lrc_generator::Lrc_generator(fs::path &in_file, fs::path &out_file,
   this->metadata = vector<string>();
 
   this->songfile = song_path;
-  // load the song in a sf::Music object
-  // it's a stream, so it must not be destroyed as long as it's being played
-  // supported formats are those listed at
-  // https://www.sfml-dev.org/tutorials/2.5/audio-sounds.php
-  if (!this->song.openFromFile(song_path.string())) {
-    LOG_F(ERROR, "Failed to open song file: %s", this->songfile.c_str());
-  }
 }
 
 Lrc_generator::~Lrc_generator() {
@@ -77,10 +71,12 @@ Lrc_generator::~Lrc_generator() {
     this->output_stream << ln << '\n';
   }
   // add lenght metadata
-  float dur = this->song.getDuration().asSeconds();
-  int mins = dur / 60;
-  int secs = dur - 60 * mins;
-  this->output_stream << "[length:" << mins << '.' << secs << "]\n";
+  if (this->song) {
+    float dur = this->song.get()->getDuration().asSeconds();
+    int mins = dur / 60;
+    int secs = dur - 60 * mins;
+    this->output_stream << "[length:" << mins << '.' << secs << "]\n";
+  }
 
   // write synchronized lines
   for (i = 0; i < this->lrc_text.size(); i++) {
@@ -88,6 +84,22 @@ Lrc_generator::~Lrc_generator() {
     this->output_stream << this->lrc_text[i] << this->lyrics[i] << '\n';
   }
   this->output_stream.close();
+}
+
+bool
+Lrc_generator::load_song() {
+  // load the song in a sf::Music object
+  // it's a stream, so it must not be destroyed as long as it's being played
+  // supported formats are those listed at
+  // https://www.sfml-dev.org/tutorials/2.5/audio-sounds.php
+  std::unique_ptr<sf::Music> song = std::make_unique<sf::Music>();
+  if (!song->openFromFile(this->songfile.string())) {
+    LOG_F(ERROR, "Failed to open song file: %s", this->songfile.c_str());
+    return false;
+  }
+  this->song = std::move(song);
+  LOG_F(INFO, "Successfully set song file: %s", this->songfile.c_str());
+  return true;
 }
 
 // function to sync the lyrics to the song
@@ -133,8 +145,12 @@ Lrc_generator::sync(void) {
 
   // THE SONG (IF LOADED) STARTS PLAYING
   // does not loop when the end is reached by default
-  this->song.play();
-  float vol = this->song.getVolume();
+  float vol
+    = this->song && vol_enabled ? this->song->getVolume() : VOL_DISABLED;
+  if (this->song) {
+    this->song->play();
+    this->vol_enabled = false;
+  }
   // stores the initial timepoint
   line_start_tp = clock.now();
 
@@ -177,20 +193,20 @@ Lrc_generator::sync(void) {
     // blocks until a character is pressed
     c = wgetch(this->lyrics_win);
 
-    if (c == KEY_UP) {
+    if (c == KEY_UP && this->vol_enabled) {
       vol = std::min(100.0f, vol + volume_step);
-      this->song.setVolume(vol);
-      vol = this->song.getVolume();
+      this->song->setVolume(vol);
+      vol = this->song->getVolume();
       current = prev;
 
       LOG_F(INFO, "Volume +%f: current volume is %f", volume_step, vol);
 
       continue;
     }
-    if (c == KEY_DOWN) {
+    if (c == KEY_DOWN && this->vol_enabled) {
       vol = std::max(0.0f, vol - volume_step);
-      this->song.setVolume(vol);
-      vol = this->song.getVolume();
+      this->song->setVolume(vol);
+      vol = this->song->getVolume();
       current = prev;
 
       LOG_F(INFO, "Volume -%f: current volume is %f", volume_step, vol);
@@ -205,7 +221,9 @@ Lrc_generator::sync(void) {
       tot_playback
         += std::chrono::duration_cast<MilliSecs>(clock.now() - line_start_tp);
       // pause the audio track and wait for another key press to resume
-      this->song.pause();
+      if (this->song) {
+        this->song->pause();
+      }
       wclear(this->lyrics_win);
       box(this->lyrics_win, 0, 0);
       wstandout(this->lyrics_win);
@@ -236,15 +254,19 @@ Lrc_generator::sync(void) {
     if (c == 's') {
       // Restart sychronization
 
-      // stop the this->song, clear the output and reset the index and line
-      this->song.stop();
+      // stop the song, clear the output and reset the index and line
+      if (this->song) {
+        this->song->stop();
+      }
       this->lrc_text.clear();
       this->delays.clear();
       // reset the starting clock and the song duration offset
       tot_playback = MilliSecs::zero();
       idx = 0;
       prev.erase();
-      this->song.play(); // restart playing the song
+      if (this->song) {
+        this->song->play(); // restart playing the song
+      }
       line_start_tp = clock.now();
 
       LOG_F(INFO, "Synchronization restarted");
@@ -265,7 +287,9 @@ Lrc_generator::sync(void) {
   }
 
   // sync done, the song stops
-  this->song.stop();
+  if (this->song) {
+    this->song->stop();
+  }
   wclear(this->lyrics_win);
 
   LOG_F(INFO, "Synchronization Done");
@@ -274,13 +298,15 @@ Lrc_generator::sync(void) {
 // previews the synchronized lyrics
 void
 Lrc_generator::preview_lrc(void) {
+  bool song_loaded = !!this->song;
+
   LOG_SCOPE_FUNCTION(INFO);
 
   if (this->lrc_text.empty()) {
     char choice
       = choice_dialog("Song not synchronized yet. Start synchronization?");
     wclear(this->menu);
-    draw_menu();
+    draw_menu(song_loaded);
     wrefresh(this->menu);
     if (choice == 'y') {
       sync();
@@ -289,7 +315,9 @@ Lrc_generator::preview_lrc(void) {
 
   LOG_F(INFO, "Preview of %s started", this->songfile.c_str());
 
-  this->song.play();
+  if (this->song) {
+    this->song->play();
+  }
 
   vector<string> content(1, "PREVIEW");
   vector<attr_t> styles = {A_STANDOUT, A_BOLD};
@@ -311,7 +339,9 @@ Lrc_generator::preview_lrc(void) {
   styles.push_back(A_BOLD);
   render_win(this->lyrics_win, content, styles);
 
-  this->song.stop();
+  if (this->song) {
+    this->song->stop();
+  }
 
   // just to prevent the window from closing
   wgetch(this->lyrics_win);
@@ -321,6 +351,9 @@ Lrc_generator::preview_lrc(void) {
 // the menu loop presented by the class to the user
 void
 Lrc_generator::run(void) {
+  // Try to load the song
+  bool song_loaded = load_song();
+
   // setup the interface
   interface_setup();
 
@@ -328,7 +361,7 @@ Lrc_generator::run(void) {
   int action;
   while (cont) {
     // draws the menu
-    draw_menu();
+    draw_menu(song_loaded);
     // gets a character from the menu window and triggers the action accordingly
     action = wgetch(this->menu);
     switch (action - '0') {

@@ -9,6 +9,7 @@
 #include <fstream>
 #include <string>
 #include <vector>
+#include <memory>
 // ncurses header
 #include <ncurses.h>
 
@@ -23,6 +24,11 @@ using std::vector;
 // the .lrc file
 class Lrc_generator {
 private:
+  // constants
+  const float VOL_DISABLED = -1.0;
+
+  bool vol_enabled = true;
+
   // the output text stream to write to
   std::ofstream output_stream;
 
@@ -37,7 +43,10 @@ private:
 
   // music stream filename
   fs::path songfile;
-  sf::Music song;
+  std::unique_ptr<sf::Music> song;
+
+  // Load a the song to be played when synchronizing into an sf::Music object
+  bool load_song(void);
 
   // interactively sync the lyrics to the song
   void sync(void);
@@ -53,7 +62,7 @@ private:
   void interface_setup(void);
   void render_win(WINDOW *win, vector<string> &content, vector<attr_t> &style);
   // utility function to draw the menu
-  void draw_menu(void);
+  void draw_menu(bool song_loaded);
   // creates a dialog to set the chosen attribute
   void set_attr_dialog(string msg, string attr);
   // displays a simple choiche dialog
