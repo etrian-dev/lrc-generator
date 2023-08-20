@@ -4,3 +4,6 @@ text/
 lrc/
 
 .vscode
+subprojects/cxxopts-*/
+subprojects/loguru-*/
+subprojects/packagecache/
