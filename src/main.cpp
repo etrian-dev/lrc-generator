@@ -1,7 +1,7 @@
 // header file for the generator class
 #include "lrc-generator.h"
 // header file for arg parsing
-#include "cxxopts.hpp"
+#include "CLI/CLI.hpp"
 // logging library
 #include "loguru.hpp"
 // curses library
@@ -15,115 +15,90 @@
 namespace fs = std::filesystem;
 
 using std::string;
-using std::literals::string_literals::operator"" s;
 
-// functions to initialize the ncurses library and do cleanup respectively
-void
-init_ncurses() {
-  initscr();            // start curses
-  cbreak();             // disable line buffering
-  noecho();             // disable input echo
-  keypad(stdscr, true); // enable the keypad and fn keys
+// class to initialize the ncurses library and do cleanup respectively
+struct ncurses_initor
+{
+  ncurses_initor()
+  {
+    initscr();            // start curses
+    cbreak();             // disable line buffering
+    noecho();             // disable input echo
+    keypad(stdscr, true); // enable the keypad and fn keys
 
-  refresh();
-}
-void
-cleanup_ncurses(void) {
-  endwin();
-}
+    refresh();
+  }
 
-std::vector<string>
+  ~ncurses_initor()
+  {
+    endwin();
+  }
+};
+
+struct files_type
+{
+  string audio_fname;
+  string lyrics_fname;
+  string lrc_fname;
+};
+
+static files_type
 parse_args(int argc, char **argv) {
-  std::vector<string> files = std::vector<string>();
+  std::ios::sync_with_stdio(false);
 
-  cxxopts::Options all_opts("Lrc generator",
-                            "A simple TUI to generate .lrc files");
-  all_opts.add_options()("h,help", "Help message")("v,version",
-                                                   "Prints the version number")(
-    "o,output", "Output file to be written", cxxopts::value<string>())(
-    "a,audio-file", "Input audio file",
-    cxxopts::value<string>())("l,lyrics-file", "Input lyrics file",
-                              cxxopts::value<string>());
+  CLI::App app{"Lrc generator\n\n" "A simple TUI to generate .lrc files"};
 
-  auto res = all_opts.parse(argc, argv);
-  if (res.count("help") > 0) {
-    std::cout << all_opts.help() << "\n";
-    return files;
-  }
-  if (res.count("version") > 0) {
-    std::cout << argv[0] << ": " << VERSION << "\n";
-    return files;
-  }
-  string audio_fname = string();
-  string lyrics_fname = string();
-  string lrc_fname = string();
+  string audio_fname, lyrics_fname, lrc_fname;
+  string log_fname;
+
+  app.set_version_flag("-v,--version", VERSION, "Prints the version number");
+  // If audio_fname is empty, Lrc_generator won't load it. This will be
+  // improved in the future.
+  app.add_option("-a,--audio-file", audio_fname, "Input audio file")
+    ->check(CLI::ExistingFile);
+  app.add_option("-l,--lyrics-file", lyrics_fname, "Input lyrics file")
+    ->required()
+    ->check(CLI::ExistingFile);
+  app.add_option("-o,--output", lrc_fname, "Output lrc file to be written")
+    ->required();
+  app.add_option("--log-file", log_fname, "Log file");
+
   try {
-    if (res.count("audio-file") > 0 || res.count("lyrics-file") > 0) {
-      audio_fname = res["audio-file"].as<string>();
-      lyrics_fname = res["lyrics-file"].as<string>();
-    }
-    else {
-      std::cout << "Required args missing\n";
-      std::cout << all_opts.help() << "\n";
-      return files;
-    }
+    app.parse(argc, argv);
+  } catch (const CLI::ParseError &e) {
+    std::exit(app.exit(e));
   }
-  catch (std::exception &e) {
-    std::cout << "Exception: " << e.what() << "\n" << all_opts.help() << "\n";
-    return files;
+
+  if (!log_fname.empty()) {
+    loguru::add_file(log_fname.c_str(), loguru::Truncate,
+                     loguru::Verbosity_INFO);
   }
-  if (res.count("output") == 1) {
-    lrc_fname = res["output"].as<string>();
-  }
-  else {
-    // default to text file filename (later on the extension is changed to .lrc)
-    lrc_fname = lyrics_fname;
-  }
-  files.push_back(audio_fname);
-  files.push_back(lyrics_fname);
-  files.push_back(lrc_fname);
-  return files;
+
+  return {audio_fname, lyrics_fname, lrc_fname};
 }
 
 int
 main(int argc, char **argv) {
-  loguru::init(argc, argv);
-  loguru::g_stderr_verbosity = loguru::Verbosity_ERROR;
-  string logfile(argv[0]);
-  logfile += ".log";
-  loguru::add_file(logfile.c_str(), loguru::Truncate, loguru::Verbosity_INFO);
+  std::ios::sync_with_stdio(false);
 
-  std::vector<string> files = parse_args(argc, argv);
-  if (files.size() == 0) {
-    return 1;
-  }
-  string audio_fname = files[0];
-  string lyrics_fname = files[1];
-  string lrc_fname = files[2];
+  // Most of the program's lifetime will be spent in ncurses. Ncurses handles IO
+  // on its own so loguru could interfere with it. Logging to file should be
+  // prefered.
+  loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
 
-  fs::path audio_path = fs::path(audio_fname);
-  fs::path lyrics_path = fs::path(lyrics_fname);
-  fs::path lrc_path = fs::path(lrc_fname);
-  if (fs::exists(lyrics_path)) {
-    if (lyrics_path.has_extension()) {
-      if (lyrics_path.compare(lrc_path) == 0) {
-        lrc_path = lrc_path.replace_extension(".lrc");
-      }
-    }
-    else {
-      lrc_path += ".lrc";
-    }
-  }
-  else {
-    LOG_IF_F(ERROR, not fs::exists(lyrics_path), "Lyrics file not found: %s",
-             lyrics_path.c_str());
-    return 1;
-  }
+  // Loguru handles the -v command line flag by default. This is unwanted
+  // because it interferes with CLI11's command line parsing (there shouldn't be
+  // two command line parsers at once) and stderr logging is disabled anyway.
+  loguru::Options loguru_opts;
+  loguru_opts.verbosity_flag = nullptr;
 
-  // TODO: simple workaround to pass strings to the generator
-  audio_fname = audio_path.filename();
-  lyrics_fname = lyrics_path.filename();
-  lrc_fname = lrc_path.filename();
+  loguru::init(argc, argv, loguru_opts);
+
+  files_type files = parse_args(argc, argv);
+
+  fs::path audio_path = fs::path(files.audio_fname);
+  fs::path lyrics_path = fs::path(files.lyrics_fname);
+  fs::path lrc_path = fs::path(files.lrc_fname);
 
   // Lrc_generator is a simple class to generate the lrc file (includes a tui)
   LOG_F(INFO, "Arguments summary:");
@@ -137,12 +112,9 @@ main(int argc, char **argv) {
   Lrc_generator generator(lyrics_path, lrc_path, audio_path);
 
   // initialize the curses library for immediate input and keypad enabled
-  init_ncurses();
+  ncurses_initor ncur;
 
   generator.run(); // main program loop (menu)
-
-  // does the cleanup
-  cleanup_ncurses();
 
   return 0;
 }
