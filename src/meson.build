@@ -1,9 +1,9 @@
 curses_dep = dependency('curses')
 sfml_dep = dependency('sfml-audio')
 loguru_dep = dependency('loguru')
-cxxopts_dep = dependency('cxxopts')
+cli11_dep = dependency('cli11')
 
-deps = [curses_dep, sfml_dep, loguru_dep, cxxopts_dep]
+deps = [curses_dep, sfml_dep, loguru_dep, cli11_dep]
 
 sources = [
   'main.cpp',
