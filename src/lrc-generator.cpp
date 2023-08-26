@@ -15,8 +15,8 @@
 #include <fstream>
 #include <iomanip> // streams formatting functions
 #include <iostream>
-#include <memory>
 #include <limits> // to obtain a stream's max size
+#include <memory>
 #include <ratio>
 #include <string>
 #include <thread>
@@ -86,8 +86,7 @@ Lrc_generator::~Lrc_generator() {
   this->output_stream.close();
 }
 
-bool
-Lrc_generator::load_song() {
+bool Lrc_generator::load_song() {
   // load the song in a sf::Music object
   // it's a stream, so it must not be destroyed as long as it's being played
   // supported formats are those listed at
@@ -103,13 +102,12 @@ Lrc_generator::load_song() {
 }
 
 // function to sync the lyrics to the song
-void
-Lrc_generator::sync(void) {
+void Lrc_generator::sync(void) {
   LOG_SCOPE_FUNCTION(INFO);
 
   // Render the synchronization menu
-  vector<string> menuitems
-    = {"MENU", "[space] pause", "[s] restart", "[other keys] set timestamp"};
+  vector<string> menuitems = {"MENU", "[space] pause", "[s] restart",
+                              "[other keys] set timestamp"};
   vector<attr_t> attributes = {A_STANDOUT, A_NORMAL, A_NORMAL, A_NORMAL};
   render_win(this->menu, menuitems, attributes);
 
@@ -145,8 +143,8 @@ Lrc_generator::sync(void) {
 
   // THE SONG (IF LOADED) STARTS PLAYING
   // does not loop when the end is reached by default
-  float vol
-    = this->song && vol_enabled ? this->song->getVolume() : VOL_DISABLED;
+  float vol =
+      this->song && vol_enabled ? this->song->getVolume() : VOL_DISABLED;
   if (this->song) {
     this->song->play();
     this->vol_enabled = false;
@@ -161,27 +159,26 @@ Lrc_generator::sync(void) {
     current = this->lyrics[idx];
     if (idx < tot_lines - 1) {
       next = this->lyrics[idx + 1];
-    }
-    else {
+    } else {
       next.erase();
     }
 
     // Synchronize the current line
     // formatted as [mm:ss.centsecond] (the line is added when the output is
     // written)
-    string str_timestamp
-      = "[" + std::to_string((tot_playback.count() / 60000) % 60000) + ":"
-        + std::to_string((tot_playback.count() / 1000) % 60) + "."
-        + std::to_string((tot_playback.count() / 10) % 100) + "]";
+    string str_timestamp =
+        "[" + std::to_string((tot_playback.count() / 60000) % 60000) + ":" +
+        std::to_string((tot_playback.count() / 1000) % 60) + "." +
+        std::to_string((tot_playback.count() / 10) % 100) + "]";
     this->lrc_text.push_back(str_timestamp);
     this->delays.push_back(tot_playback.count());
 
     LOG_F(INFO, "%s%s", str_timestamp.c_str(), current.c_str());
 
     vector<string> content = {"SYNCHRONIZATION", prev, current, next};
-    content.push_back("Last timestamp: "
-                      + std::to_string(tot_playback.count() / 1000) + "."
-                      + std::to_string((tot_playback.count() / 10) % 100));
+    content.push_back(
+        "Last timestamp: " + std::to_string(tot_playback.count() / 1000) + "." +
+        std::to_string((tot_playback.count() / 10) % 100));
     content.push_back("volume: " + std::to_string(vol));
     // set attributes vector
     vector<attr_t> styles(content.size(), A_NORMAL);
@@ -218,8 +215,8 @@ Lrc_generator::sync(void) {
       // Pause the synchronization
 
       // stores the time passed from the last timestamp up to now
-      tot_playback
-        += std::chrono::duration_cast<MilliSecs>(clock.now() - line_start_tp);
+      tot_playback +=
+          std::chrono::duration_cast<MilliSecs>(clock.now() - line_start_tp);
       // pause the audio track and wait for another key press to resume
       if (this->song) {
         this->song->pause();
@@ -277,8 +274,8 @@ Lrc_generator::sync(void) {
     // save the current time point
     current_tp = clock.now();
     // calculate the duration of the line just finished
-    tot_playback
-      += std::chrono::duration_cast<MilliSecs>(current_tp - line_start_tp);
+    tot_playback +=
+        std::chrono::duration_cast<MilliSecs>(current_tp - line_start_tp);
 
     // the starting timepoint for the new line is the one saved above
     line_start_tp = current_tp;
@@ -296,15 +293,14 @@ Lrc_generator::sync(void) {
 }
 
 // previews the synchronized lyrics
-void
-Lrc_generator::preview_lrc(void) {
+void Lrc_generator::preview_lrc(void) {
   bool song_loaded = !!this->song;
 
   LOG_SCOPE_FUNCTION(INFO);
 
   if (this->lrc_text.empty()) {
-    char choice
-      = choice_dialog("Song not synchronized yet. Start synchronization?");
+    char choice =
+        choice_dialog("Song not synchronized yet. Start synchronization?");
     wclear(this->menu);
     draw_menu(song_loaded);
     wrefresh(this->menu);
@@ -349,8 +345,7 @@ Lrc_generator::preview_lrc(void) {
 }
 
 // the menu loop presented by the class to the user
-void
-Lrc_generator::run(void) {
+void Lrc_generator::run(void) {
   // Try to load the song
   bool song_loaded = load_song();
 
@@ -365,27 +360,27 @@ Lrc_generator::run(void) {
     // gets a character from the menu window and triggers the action accordingly
     action = wgetch(this->menu);
     switch (action - '0') {
-      case 0:
-        sync();
-        break;
-      case 1:
-        preview_lrc();
-        break;
-      case 2:
-        set_attr_dialog("Song title", "ti");
-        break;
-      case 3:
-        set_attr_dialog("Song artist", "ar");
-        break;
-      case 4:
-        set_attr_dialog("Song album", "al");
-        break;
-      case 5:
-        set_attr_dialog("Lrc creator", "by");
-        break;
-      default:
-        // quit the program
-        cont = false;
+    case 0:
+      sync();
+      break;
+    case 1:
+      preview_lrc();
+      break;
+    case 2:
+      set_attr_dialog("Song title", "ti");
+      break;
+    case 3:
+      set_attr_dialog("Song artist", "ar");
+      break;
+    case 4:
+      set_attr_dialog("Song album", "al");
+      break;
+    case 5:
+      set_attr_dialog("Lrc creator", "by");
+      break;
+    default:
+      // quit the program
+      cont = false;
     }
 
     // after the dialog is destroyed, clear & refresh all the windows
