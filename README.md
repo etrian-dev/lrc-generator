@@ -9,10 +9,10 @@ More information about this file format can be found on Wikipedia
 
 ## Building from source
 ### Requirements
-* A C++ compiler supporting at least c++17 (because of std::filesystem)
-* SFML library (tested with 2.5.1)
-* ncurses library (tested with 6.2)
-* meson
+* A C++ compiler supporting at least C++17
+* SFML library ( tested with 2.5.1 )
+* ncurses library ( tested with 6.2 )
+* meson ( >=0.63 )
 * ninja
 
 ```
