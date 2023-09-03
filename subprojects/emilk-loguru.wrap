@@ -1,0 +1,13 @@
+[wrap-file]
+directory = loguru-2.1.0
+source_url = https://github.com/emilk/loguru/archive/v2.1.0.tar.gz
+source_filename = loguru_2.1.0.tar.gz
+source_hash = 1a3be62ebec5609af60b1e094109a93b7412198b896bb88f31dcfe4d95b79ce7
+patch_filename = emilk-loguru_2.1.0-9_patch.zip
+patch_url = https://wrapdb.mesonbuild.com/v2/emilk-loguru_2.1.0-9/get_patch
+patch_hash = 1a1c4ef09e36ddd553f0ec404f570c177a8fb8e2d64bae083ab1333b76c74042
+source_fallback_url = https://github.com/mesonbuild/wrapdb/releases/download/emilk-loguru_2.1.0-9/loguru_2.1.0.tar.gz
+wrapdb_version = 2.1.0-9
+
+[provide]
+loguru = emilk_loguru_dep
